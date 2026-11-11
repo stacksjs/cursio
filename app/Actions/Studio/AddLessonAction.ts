@@ -25,6 +25,7 @@ export default new Action({
         body: request.get('body') ? String(request.get('body')) : undefined,
         videoUrl: request.get('video_url') ? String(request.get('video_url')) : undefined,
         durationSeconds: Number(request.get('duration_seconds')) || 0,
+        unlockAfterDays: Number(request.get('unlock_after_days')) || null,
       })
       return response.json({ success: true, lesson }, 201)
     }

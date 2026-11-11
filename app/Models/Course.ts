@@ -75,8 +75,21 @@ export default defineModel({
       factory: () => 'draft',
     },
 
-    publishedAt: {
+    /**
+     * `open`: any Lesson, any order. `linear`: a Lesson opens once every Lesson
+     * before it is completed.
+     */
+    progression: {
+      required: true,
+      default: 'open',
       order: 5,
+      fillable: true,
+      validation: { rule: schema.enum(['open', 'linear']) },
+      factory: () => 'open',
+    },
+
+    publishedAt: {
+      order: 6,
       validation: { rule: schema.date() },
     },
   },

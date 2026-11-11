@@ -1,7 +1,7 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
 import { lessonForLearner } from '../../Support/enrollment'
-import { idParam, userIdOf } from '../../Support/http'
+import { idParam, refusal, userIdOf } from '../../Support/http'
 
 export default new Action({
   name: 'LearnLessonShow',
@@ -13,10 +13,16 @@ export default new Action({
     if (!userId)
       return response.unauthorized('Authentication required')
 
-    const lesson = await lessonForLearner(userId, idParam(request, 'id'))
-    if (!lesson)
-      return response.notFound('Lesson not found')
+    try {
+      const lesson = await lessonForLearner(userId, idParam(request, 'id'))
+      if (!lesson)
+        return response.notFound('Lesson not found')
 
-    return response.json({ lesson })
+      return response.json({ lesson })
+    }
+    catch (error) {
+      // Enrolled, but the Lesson is not open yet (drip or sequence).
+      return refusal(error)
+    }
   },
 })

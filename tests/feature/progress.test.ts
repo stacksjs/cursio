@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildOutline, courseProgress, slugFrom } from '../../app/Support/progress'
+import { buildOutline, courseProgress, isPermutation, lessonAccess, slugFrom } from '../../app/Support/progress'
 
 const sections = [
   { id: 2, title: 'Second', position: 1 },
@@ -72,5 +72,58 @@ describe('slugs', () => {
 
   test('nothing usable gives an empty slug for the caller to replace', () => {
     expect(slugFrom('!!!')).toBe('')
+  })
+})
+
+describe('which lessons are open', () => {
+  const enrolledAt = new Date('2026-01-01T00:00:00Z')
+  const day = (n: number) => new Date(enrolledAt.getTime() + n * 24 * 60 * 60 * 1000)
+  const lessons = [
+    { id: 1, unlock_after_days: null },
+    { id: 2, unlock_after_days: 7 },
+    { id: 3, unlock_after_days: null },
+  ]
+  const access = (overrides: Partial<Parameters<typeof lessonAccess>[0]> = {}) =>
+    lessonAccess({ lessons, completedIds: [], progression: 'open', enrolledAt, now: day(0), ...overrides })
+
+  test('an open course opens everything that is not dripped', () => {
+    const result = access()
+
+    expect(result.get(1)?.open).toBe(true)
+    expect(result.get(3)?.open).toBe(true)
+  })
+
+  test('a dripped lesson is closed until its day, and says when it opens', () => {
+    expect(access({ now: day(6) }).get(2)).toEqual({ open: false, reason: 'drip', opensAt: day(7).toISOString() })
+    expect(access({ now: day(7) }).get(2)?.open).toBe(true)
+  })
+
+  test('a linear course opens a lesson only after everything before it', () => {
+    const result = access({ progression: 'linear', now: day(30) })
+
+    expect(result.get(1)?.open).toBe(true)
+    expect(result.get(2)).toEqual({ open: false, reason: 'sequence', opensAt: null })
+    expect(access({ progression: 'linear', now: day(30), completedIds: [1] }).get(2)?.open).toBe(true)
+    expect(access({ progression: 'linear', now: day(30), completedIds: [1] }).get(3)?.open).toBe(false)
+  })
+
+  test('when both rules close a lesson, drip is the reason given', () => {
+    expect(access({ progression: 'linear' }).get(2)?.reason).toBe('drip')
+  })
+
+  test('a completed lesson stays open whatever the rules say now', () => {
+    const result = access({ progression: 'linear', completedIds: [2, 3] })
+
+    expect(result.get(2)?.open).toBe(true)
+    expect(result.get(3)?.open).toBe(true)
+  })
+})
+
+describe('reordering', () => {
+  test('only the same set of ids is a valid new order', () => {
+    expect(isPermutation([1, 2, 3], [3, 1, 2])).toBe(true)
+    expect(isPermutation([1, 2, 3], [1, 2])).toBe(false)
+    expect(isPermutation([1, 2, 3], [1, 2, 2])).toBe(false)
+    expect(isPermutation([1, 2, 3], [1, 2, 4])).toBe(false)
   })
 })

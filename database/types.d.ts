@@ -552,6 +552,7 @@ declare module '@stacksjs/database' {
       slug: string
       summary: string
       status: "draft" | "published" | "archived"
+      progression: "open" | "linear"
       published_at: string
       team_id: number
       academy_id: number
@@ -922,6 +923,7 @@ declare module '@stacksjs/database' {
       body: string
       video_url: string
       duration_seconds: number
+      unlock_after_days: number
       position: number
       team_id: number
       course_id: number

@@ -1,6 +1,6 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
-import { courseInAcademy, outlineOf } from '../../Support/courses'
+import { courseInAcademy, lessonsForStudio, outlineOf } from '../../Support/courses'
 import { idParam, staffContext } from '../../Support/http'
 
 export default new Action({
@@ -17,6 +17,6 @@ export default new Action({
     if (!course)
       return response.notFound('Course not found')
 
-    return response.json({ course, outline: await outlineOf(course.id) })
+    return response.json({ course, outline: await outlineOf(course.id), lessons: await lessonsForStudio(course.id) })
   },
 })

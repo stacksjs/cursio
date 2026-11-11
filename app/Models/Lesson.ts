@@ -74,6 +74,16 @@ export default defineModel({
       factory: () => 300,
     },
 
+    /**
+     * The Drip Rule, in its first form: the Lesson opens this many days after
+     * the Learner enrolled. Unset means it is open from the start.
+     */
+    unlockAfterDays: {
+      order: 7,
+      fillable: true,
+      validation: { rule: schema.number().min(0).max(3650) },
+    },
+
     /** Where it sits in its Section. */
     position: {
       required: true,

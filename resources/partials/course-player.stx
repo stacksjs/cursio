@@ -8,6 +8,7 @@ const total = {{ lessonTotal }}
 const signedIn = state(false)
 const enrolled = state(false)
 const doneIds = state([])
+const locked = state({})
 const openLesson = state(null)
 const busy = state(false)
 const problem = state('')
@@ -19,6 +20,24 @@ function isDone(lessonId) {
   return doneIds().includes(lessonId)
 }
 
+function isLocked(lessonId) {
+  return Boolean(locked()[lessonId])
+}
+
+function lockNote(lessonId) {
+  const state = locked()[lessonId]
+  if (!state)
+    return ''
+  if (state.reason === 'drip' && state.opensAt)
+    return `Opens ${new Date(state.opensAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+  return 'After the earlier lessons'
+}
+
+function take(progress) {
+  doneIds.set(progress?.completedIds ?? [])
+  locked.set(progress?.locked ?? {})
+}
+
 async function load() {
   signedIn.set(Boolean(useAuth().getToken()))
   if (!signedIn())
@@ -26,7 +45,7 @@ async function load() {
   try {
     const data = await dashboardApi(`${coursePath}/progress`)
     enrolled.set(data.enrolled)
-    doneIds.set(data.progress?.completedIds ?? [])
+    take(data.progress)
   }
   catch {
     // Signed-out or expired: the page still shows the public outline.
@@ -40,7 +59,7 @@ async function enrollNow() {
   try {
     const data = await dashboardApi(`${coursePath}/enroll`, { method: 'POST', body: {} })
     enrolled.set(true)
-    doneIds.set(data.progress.completedIds)
+    take(data.progress)
   }
   catch (error) {
     problem.set(error?.message || 'Enrollment did not go through.')
@@ -49,7 +68,7 @@ async function enrollNow() {
 }
 
 async function open(lessonId) {
-  if (!enrolled())
+  if (!enrolled() || isLocked(lessonId))
     return
   problem.set('')
   try {
@@ -68,9 +87,9 @@ async function complete() {
   busy.set(true)
   try {
     const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/complete`, { method: 'POST', body: {} })
-    doneIds.set(data.progress.completedIds)
+    take(data.progress)
     openLesson.set({ ...lesson, completed: true })
-    if (data.progress.nextLessonId)
+    if (data.progress.nextLessonId && !data.progress.locked[data.progress.nextLessonId])
       await open(data.progress.nextLessonId)
   }
   catch (error) {
@@ -114,8 +133,9 @@ onMount(load)
             @foreach(section.lessons as lesson)
               <li>
                 <button type="button" class="flex gap-3 items-center px-3 py-2.5 w-full text-left hover:bg-tint rounded-xl transition-colors" :class="openLesson()?.id === {{ lesson.id }} ? 'bg-tint' : ''" @click="open({{ lesson.id }})">
-                  <span class="shrink-0 size-5" :class="isDone({{ lesson.id }}) ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-circle text-muted'" aria-hidden="true"></span>
-                  <span class="flex-1 text-ink text-sm">{{ lesson.title }}</span>
+                  <span class="shrink-0 size-5" :class="isDone({{ lesson.id }}) ? 'i-hugeicons-checkmark-circle-02 text-accent' : (isLocked({{ lesson.id }}) ? 'i-hugeicons-square-lock-02 text-muted' : 'i-hugeicons-circle text-muted')" aria-hidden="true"></span>
+                  <span class="flex-1 text-sm" :class="isLocked({{ lesson.id }}) ? 'text-muted' : 'text-ink'">{{ lesson.title }}</span>
+                  <span class="text-muted text-xs" x-text="lockNote({{ lesson.id }})"></span>
                 </button>
               </li>
             @endforeach

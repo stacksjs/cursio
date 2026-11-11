@@ -14149,6 +14149,19 @@
             "isUnique": true,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "progression",
+            "type": "enum",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": "open",
+            "enumValues": [
+              "open",
+              "linear"
+            ]
           }
         ],
         "indexes": [
@@ -14488,6 +14501,14 @@
             "isUnique": true,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "unlock_after_days",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
           }
         ],
         "indexes": [
@@ -14589,7 +14610,7 @@
       }
     ]
   },
-  "hash": "3da373298d6956d8da09f7864c6643637d03bd923413e99f245ff8813f620ed6",
+  "hash": "4c727c542ae5427eff6b01d8368626afbb6b46d0bdc5bf28f9665c43893dcc79",
   "dialect": "sqlite",
-  "updatedAt": "2026-11-11T21:18:41.020Z"
+  "updatedAt": "2026-11-11T21:36:43.467Z"
 }

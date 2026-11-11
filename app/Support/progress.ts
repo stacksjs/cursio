@@ -20,6 +20,8 @@ export interface OutlineLesson {
   kind: string
   duration_seconds: number
   position: number
+  /** Days after enrollment before the Lesson opens. Null: open from the start. */
+  unlock_after_days?: number | null
 }
 
 export interface Outline {
@@ -74,6 +76,75 @@ export function courseProgress(lessonIds: number[], completedIds: Iterable<numbe
     nextLessonId,
     isComplete: total > 0 && completed === total,
   }
+}
+
+export interface LessonAccess {
+  open: boolean
+  /** Why it is closed: `drip` (not yet), `sequence` (earlier Lessons first). */
+  reason: 'drip' | 'sequence' | null
+  /** When a dripped Lesson opens, ISO. */
+  opensAt: string | null
+}
+
+const DAY = 24 * 60 * 60 * 1000
+
+/**
+ * Which Lessons a Learner may open right now.
+ *
+ * Two independent rules, both of which must allow it:
+ *   - Drip: a Lesson with `unlock_after_days` opens that many days after the
+ *     Learner enrolled.
+ *   - Sequence: in a `linear` Course a Lesson opens once every Lesson before
+ *     it, in teaching order, is completed.
+ *
+ * A Lesson already completed stays open whatever the rules say now: changing a
+ * Course must never lock a Learner out of something they have done.
+ * When both rules close a Lesson, drip is the reason given, because it is the
+ * one the Learner cannot do anything about.
+ */
+export function lessonAccess(input: {
+  lessons: Pick<OutlineLesson, 'id' | 'unlock_after_days'>[]
+  completedIds: Iterable<number>
+  progression: string
+  enrolledAt: Date
+  now: Date
+}): Map<number, LessonAccess> {
+  const done = new Set(input.completedIds)
+  const result = new Map<number, LessonAccess>()
+  let earlierAllDone = true
+
+  for (const lesson of input.lessons) {
+    const days = lesson.unlock_after_days ?? 0
+    const opensAt = days > 0 ? new Date(input.enrolledAt.getTime() + days * DAY) : null
+    const dripped = opensAt !== null && opensAt.getTime() > input.now.getTime()
+    const outOfSequence = input.progression === 'linear' && !earlierAllDone
+
+    if (done.has(lesson.id))
+      result.set(lesson.id, { open: true, reason: null, opensAt: null })
+    else if (dripped)
+      result.set(lesson.id, { open: false, reason: 'drip', opensAt: opensAt.toISOString() })
+    else if (outOfSequence)
+      result.set(lesson.id, { open: false, reason: 'sequence', opensAt: null })
+    else
+      result.set(lesson.id, { open: true, reason: null, opensAt: null })
+
+    if (!done.has(lesson.id))
+      earlierAllDone = false
+  }
+
+  return result
+}
+
+/**
+ * A new order for a set of ids is valid only if it is the same set: nothing
+ * added, nothing dropped, nothing twice. Reordering must never be a way to
+ * move or delete a row.
+ */
+export function isPermutation(current: number[], next: number[]): boolean {
+  if (current.length !== next.length || new Set(next).size !== next.length)
+    return false
+  const have = new Set(current)
+  return next.every(id => have.has(id))
 }
 
 /** A URL-safe slug from a title: lowercase, hyphenated, no edges. */

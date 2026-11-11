@@ -8,11 +8,11 @@
  */
 
 import type { CourseRow } from './courses'
-import type { CourseProgress } from './progress'
+import type { CourseProgress, LessonAccess } from './progress'
 import { db } from '@stacksjs/database'
 import { isUniqueViolation } from '@stacksjs/orm'
 import { outlineOf } from './courses'
-import { courseProgress } from './progress'
+import { courseProgress, lessonAccess } from './progress'
 
 export interface EnrollmentRow {
   id: number
@@ -21,9 +21,10 @@ export interface EnrollmentRow {
   status: string
   source: string
   completed_at: string | null
+  created_at: string
 }
 
-const enrollmentColumns = ['id', 'user_id', 'course_id', 'status', 'source', 'completed_at'] as const
+const enrollmentColumns = ['id', 'user_id', 'course_id', 'status', 'source', 'completed_at', 'created_at'] as const
 
 export class EnrollmentError extends Error {}
 
@@ -66,10 +67,42 @@ async function completedLessonIds(enrollmentId: number): Promise<number[]> {
   return rows.map(row => row.lesson_id)
 }
 
-export async function progressOf(enrollment: EnrollmentRow): Promise<CourseProgress & { completedIds: number[] }> {
+/** SQLite stores `2026-11-11 21:00:00` in UTC with no zone; read it as UTC. */
+function utc(stamp: string): Date {
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(stamp) ? stamp : `${stamp.replace(' ', 'T')}Z`)
+}
+
+export type LearnerProgress = CourseProgress & {
+  completedIds: number[]
+  /** Lessons the Learner cannot open yet, by id. Open Lessons are left out. */
+  locked: Record<number, LessonAccess>
+}
+
+export async function progressOf(enrollment: EnrollmentRow, at: Date = new Date()): Promise<LearnerProgress> {
   const outline = await outlineOf(enrollment.course_id)
   const completedIds = await completedLessonIds(enrollment.id)
-  return { ...courseProgress(outline.lessonIds, completedIds), completedIds }
+  const course = await db.selectFrom('courses').select(['progression']).where('id', '=', enrollment.course_id).executeTakeFirst() as { progression: string } | undefined
+
+  const access = lessonAccess({
+    lessons: outline.sections.flatMap(section => section.lessons),
+    completedIds,
+    progression: course?.progression ?? 'open',
+    enrolledAt: utc(enrollment.created_at),
+    now: at,
+  })
+  const locked: Record<number, LessonAccess> = {}
+  for (const [id, state] of access) {
+    if (!state.open)
+      locked[id] = state
+  }
+
+  return { ...courseProgress(outline.lessonIds, completedIds), completedIds, locked }
+}
+
+function closedMessage(access: LessonAccess): string {
+  return access.reason === 'drip'
+    ? 'This lesson is not open yet.'
+    : 'Complete the earlier lessons first.'
 }
 
 /**
@@ -77,7 +110,7 @@ export async function progressOf(enrollment: EnrollmentRow): Promise<CourseProgr
  * Learner holds an active Enrollment in. When it was the last one, the
  * Enrollment is completed in the same call.
  */
-export async function completeLesson(userId: number, lessonId: number): Promise<{ enrollment: EnrollmentRow, progress: CourseProgress }> {
+export async function completeLesson(userId: number, lessonId: number, at: Date = new Date()): Promise<{ enrollment: EnrollmentRow, progress: LearnerProgress }> {
   const lesson = await db.selectFrom('lessons').select(['id', 'course_id']).where('id', '=', lessonId).executeTakeFirst() as { id: number, course_id: number } | undefined
   const enrollment = lesson ? await enrollmentOf(userId, lesson.course_id) : null
 
@@ -86,7 +119,11 @@ export async function completeLesson(userId: number, lessonId: number): Promise<
   if (!lesson || !enrollment || enrollment.status === 'revoked')
     throw new EnrollmentError('You are not enrolled in this course.')
 
-  const stamp = new Date().toISOString()
+  const closed = (await progressOf(enrollment, at)).locked[lesson.id]
+  if (closed)
+    throw new EnrollmentError(closedMessage(closed))
+
+  const stamp = at.toISOString()
   // Looked up first so that completing a Lesson twice, which is ordinary, does
   // not go through a failed insert and an error in the logs. The catch stays
   // for two requests racing past this check.
@@ -101,7 +138,7 @@ export async function completeLesson(userId: number, lessonId: number): Promise<
     }
   }
 
-  const progress = await progressOf(enrollment)
+  const progress = await progressOf(enrollment, at)
   if (progress.isComplete && enrollment.status !== 'completed') {
     await db.updateTable('enrollments').set({ status: 'completed', completed_at: stamp, updated_at: stamp }).where('id', '=', enrollment.id).execute()
     enrollment.status = 'completed'
@@ -126,7 +163,7 @@ export interface LessonContent {
  * A Lesson's content, for a Learner who may open it. Content is the product:
  * it is read only through an Enrollment, never by Lesson id alone.
  */
-export async function lessonForLearner(userId: number, lessonId: number): Promise<LessonContent | null> {
+export async function lessonForLearner(userId: number, lessonId: number, at: Date = new Date()): Promise<LessonContent | null> {
   const lesson = await db.selectFrom('lessons').select(['id', 'course_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds']).where('id', '=', lessonId).executeTakeFirst() as Omit<LessonContent, 'completed'> | undefined
   if (!lesson)
     return null
@@ -135,6 +172,12 @@ export async function lessonForLearner(userId: number, lessonId: number): Promis
   if (!enrollment || enrollment.status === 'revoked')
     return null
 
-  const done = await db.selectFrom('lesson_progress').select(['id']).where('enrollment_id', '=', enrollment.id).where('lesson_id', '=', lesson.id).executeTakeFirst()
-  return { ...lesson, completed: Boolean(done) }
+  // A Lesson that is not open yet is refused here, not just greyed out in the
+  // player: the content is what the rule protects.
+  const progress = await progressOf(enrollment, at)
+  const closed = progress.locked[lesson.id]
+  if (closed)
+    throw new EnrollmentError(closedMessage(closed))
+
+  return { ...lesson, completed: progress.completedIds.includes(lesson.id) }
 }

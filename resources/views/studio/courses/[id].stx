@@ -8,28 +8,36 @@ const courseId = typeof id !== 'undefined' ? Number(id) : 0
 import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
 
 const editingId = {{ courseId }}
+const base = `/api/studio/courses/${editingId}`
 
 const loading = state(true)
 const course = state(null)
 const sections = state([])
+const details = state([])
 const problem = state('')
 const busy = state(false)
+// The key of the row whose delete button was pressed once: a second press
+// on the same button is the confirmation.
+const pendingDelete = state('')
 
 const sectionTitle = state('')
+const editingLesson = state(0)
 const lessonSection = state('')
 const lessonTitle = state('')
 const lessonKind = state('reading')
 const lessonBody = state('')
 const lessonVideo = state('')
+const lessonDays = state('')
 
 const lessonCount = derived(() => sections().reduce((total, section) => total + section.lessons.length, 0))
 const published = derived(() => course()?.status === 'published')
 
 async function load() {
   try {
-    const data = await dashboardApi(`/api/studio/courses/${editingId}`)
+    const data = await dashboardApi(base)
     course.set(data.course)
     sections.set(data.outline.sections)
+    details.set(data.lessons)
     if (!lessonSection() && data.outline.sections.length > 0)
       lessonSection.set(String(data.outline.sections[0].id))
   }
@@ -39,11 +47,12 @@ async function load() {
   loading.set(false)
 }
 
-async function send(path, body) {
+async function send(method, path, body) {
   busy.set(true)
   problem.set('')
+  pendingDelete.set('')
   try {
-    await dashboardApi(`/api/studio/courses/${editingId}/${path}`, { method: 'POST', body })
+    await dashboardApi(`${base}${path}`, { method, body })
     await load()
     return true
   }
@@ -57,27 +66,85 @@ async function send(path, body) {
 }
 
 async function addSection() {
-  if (await send('sections', { title: sectionTitle() }))
+  if (await send('POST', '/sections', { title: sectionTitle() }))
     sectionTitle.set('')
 }
 
-async function addLesson() {
-  const saved = await send('lessons', {
-    section_id: Number(lessonSection()),
+function clearLessonForm() {
+  editingLesson.set(0)
+  lessonTitle.set('')
+  lessonBody.set('')
+  lessonVideo.set('')
+  lessonDays.set('')
+  lessonKind.set('reading')
+}
+
+function editLesson(lessonId) {
+  const lesson = details().find(item => item.id === lessonId)
+  if (!lesson)
+    return
+  editingLesson.set(lesson.id)
+  lessonSection.set(String(lesson.course_section_id))
+  lessonTitle.set(lesson.title)
+  lessonKind.set(lesson.kind)
+  lessonBody.set(lesson.body || '')
+  lessonVideo.set(lesson.video_url || '')
+  lessonDays.set(lesson.unlock_after_days ? String(lesson.unlock_after_days) : '')
+}
+
+async function saveLesson() {
+  const fields = {
     title: lessonTitle(),
     kind: lessonKind(),
     body: lessonBody(),
     video_url: lessonVideo(),
-  })
-  if (saved) {
-    lessonTitle.set('')
-    lessonBody.set('')
-    lessonVideo.set('')
+    unlock_after_days: Number(lessonDays()) || 0,
   }
+  const saved = editingLesson()
+    ? await send('PATCH', `/lessons/${editingLesson()}`, fields)
+    : await send('POST', '/lessons', { ...fields, section_id: Number(lessonSection()) })
+  if (saved)
+    clearLessonForm()
+}
+
+function moved(ids, id, step) {
+  const from = ids.indexOf(id)
+  const to = from + step
+  if (from < 0 || to < 0 || to >= ids.length)
+    return null
+  const next = [...ids]
+  next.splice(to, 0, next.splice(from, 1)[0])
+  return next
+}
+
+function moveSection(sectionId, step) {
+  const next = moved(sections().map(section => section.id), sectionId, step)
+  if (next)
+    send('POST', '/reorder', { sections: next })
+}
+
+function moveLesson(sectionId, lessonId, step) {
+  const section = sections().find(item => item.id === sectionId)
+  const next = section ? moved(section.lessons.map(lesson => lesson.id), lessonId, step) : null
+  if (next)
+    send('POST', '/reorder', { section_id: sectionId, lessons: next })
+}
+
+function remove(kind, rowId) {
+  const key = `${kind}-${rowId}`
+  if (pendingDelete() !== key) {
+    pendingDelete.set(key)
+    return
+  }
+  send('DELETE', `/${kind}s/${rowId}`)
+}
+
+function setProgression(value) {
+  send('PATCH', '', { progression: value })
 }
 
 function togglePublish() {
-  return send('publish', published() ? { unpublish: true } : {})
+  return send('POST', '/publish', published() ? { unpublish: true } : {})
 }
 
 onMount(load)
@@ -98,14 +165,34 @@ onMount(load)
       <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full disabled:opacity-60" :disabled="busy()" @click="togglePublish()">{{ published() ? 'Return to draft' : 'Publish course' }}</button>
     </div>
 
+    <fieldset class="mt-6">
+      <legend class="font-medium text-ink text-sm">How learners move through it</legend>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="course()?.progression === 'open' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="course()?.progression === 'open'" @click="setProgression('open')">Any order</button>
+        <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="course()?.progression === 'linear' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="course()?.progression === 'linear'" @click="setProgression('linear')">In order</button>
+      </div>
+    </fieldset>
+
     <div class="flex flex-col gap-4 mt-8">
       <section :for="section in sections()" class="p-5 bg-surface border border-line rounded-2xl">
-        <h2 class="font-medium text-ink">{{ section.title }}</h2>
+        <div class="flex gap-2 items-center justify-between">
+          <h2 class="font-medium text-ink">{{ section.title }}</h2>
+          <div class="flex gap-1 items-center">
+            <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move section up" :disabled="busy()" @click="moveSection(section.id, -1)"><span class="size-4 i-hugeicons-arrow-up-01" aria-hidden="true"></span></button>
+            <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move section down" :disabled="busy()" @click="moveSection(section.id, 1)"><span class="size-4 i-hugeicons-arrow-down-01" aria-hidden="true"></span></button>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" :disabled="busy()" @click="remove('section', section.id)">{{ pendingDelete() === 'section-' + section.id ? 'Delete section and its lessons?' : 'Delete' }}</button>
+          </div>
+        </div>
         <p class="mt-2 text-muted text-sm" :hidden="section.lessons.length > 0">No lessons in this section yet.</p>
         <ul class="flex flex-col gap-1 mt-3">
-          <li :for="lesson in section.lessons" class="flex gap-3 items-center px-3 py-2 rounded-xl">
-            <span class="size-4 text-muted" :class="lesson.kind === 'video' ? 'i-hugeicons-play-circle' : 'i-hugeicons-book-open-01'" aria-hidden="true"></span>
-            <span class="text-ink text-sm">{{ lesson.title }}</span>
+          <li :for="lesson in section.lessons" class="flex gap-3 items-center pl-3 rounded-xl" :class="editingLesson() === lesson.id ? 'bg-tint' : ''">
+            <span class="shrink-0 size-4 text-muted" :class="lesson.kind === 'video' ? 'i-hugeicons-play-circle' : 'i-hugeicons-book-open-01'" aria-hidden="true"></span>
+            <span class="flex-1 text-ink text-sm">{{ lesson.title }}</span>
+            <span class="text-muted text-xs" :hidden="!lesson.unlock_after_days">Opens after {{ lesson.unlock_after_days }} {{ lesson.unlock_after_days === 1 ? 'day' : 'days' }}</span>
+            <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move lesson up" :disabled="busy()" @click="moveLesson(section.id, lesson.id, -1)"><span class="size-4 i-hugeicons-arrow-up-01" aria-hidden="true"></span></button>
+            <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move lesson down" :disabled="busy()" @click="moveLesson(section.id, lesson.id, 1)"><span class="size-4 i-hugeicons-arrow-down-01" aria-hidden="true"></span></button>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" @click="editLesson(lesson.id)">Edit</button>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" :disabled="busy()" @click="remove('lesson', lesson.id)">{{ pendingDelete() === 'lesson-' + lesson.id ? 'Really delete?' : 'Delete' }}</button>
           </li>
         </ul>
       </section>
@@ -119,10 +206,10 @@ onMount(load)
       <button type="submit" class="inline-flex items-center justify-center px-5 h-11 font-medium text-ink whitespace-nowrap border border-line rounded-full disabled:opacity-60" :disabled="busy()">Add section</button>
     </form>
 
-    <form class="mt-8 p-6 bg-tint rounded-2xl" :hidden="sections().length === 0" hidden @submit.prevent="addLesson()">
-      <h2 class="font-semibold text-ink text-xl tracking-tight">New lesson</h2>
+    <form class="mt-8 p-6 bg-tint rounded-2xl" :hidden="sections().length === 0" hidden @submit.prevent="saveLesson()">
+      <h2 class="font-semibold text-ink text-xl tracking-tight">{{ editingLesson() ? 'Edit lesson' : 'New lesson' }}</h2>
       <div class="grid gap-4 grid-cols-1 md:grid-cols-3 mt-5">
-        <div>
+        <div :hidden="editingLesson() !== 0">
           <label for="lesson-section" class="block font-medium text-ink text-sm">Section</label>
           <select id="lesson-section" x-model="lessonSection" class="mt-2 px-3 h-11 w-full text-ink bg-surface border border-line rounded-xl">
             <option :for="section in sections()" :value="String(section.id)">{{ section.title }}</option>
@@ -149,7 +236,15 @@ onMount(load)
         <label for="lesson-body" class="block font-medium text-ink text-sm">Content</label>
         <textarea id="lesson-body" x-model="lessonBody" rows="6" class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
       </div>
-      <button type="submit" class="inline-flex items-center mt-5 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">Add lesson</button>
+      <div class="mt-4 max-w-xs">
+        <label for="lesson-days" class="block font-medium text-ink text-sm">Opens after (days)</label>
+        <input id="lesson-days" x-model="lessonDays" type="number" min="0" max="3650" aria-describedby="lesson-days-help" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        <p id="lesson-days-help" class="mt-2 text-muted text-sm">Days after a learner enrolls. Leave empty to open it from the start.</p>
+      </div>
+      <div class="flex flex-wrap gap-3 mt-5">
+        <button type="submit" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">{{ editingLesson() ? 'Save lesson' : 'Add lesson' }}</button>
+        <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-ink border border-line rounded-full" :hidden="editingLesson() === 0" hidden @click="clearLessonForm()">Cancel</button>
+      </div>
     </form>
   </div>
 </div>

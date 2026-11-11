@@ -45,3 +45,15 @@ export function idParam(request: RequestInstance, name: string): number {
   const value = Number(request.getParam(name))
   return Number.isInteger(value) && value > 0 ? value : 0
 }
+
+/** A text field the client actually sent, or undefined: absent means "leave it". */
+export function sent(request: RequestInstance, name: string): string | undefined {
+  const value = request.get(name)
+  return value === undefined || value === null ? undefined : String(value)
+}
+
+/** A list of positive ids from the body, or an empty list. */
+export function idList(request: RequestInstance, name: string): number[] {
+  const value = request.get(name)
+  return Array.isArray(value) ? value.map(Number).filter(id => Number.isInteger(id) && id > 0) : []
+}

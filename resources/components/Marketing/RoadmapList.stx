@@ -1,0 +1,29 @@
+<script server>
+import { describe, features, horizons } from '~/resources/data/features'
+
+const rows = horizons.map(horizon => ({
+  label: horizon.label,
+  items: features.filter(feature => feature.horizon === horizon.key).map(describe),
+}))
+</script>
+<section id="roadmap" class="mx-auto px-4 py-16 md:px-8 md:py-24 max-w-7xl">
+  <h2 class="font-semibold text-3xl text-ink tracking-tight md:text-4xl">What ships when.</h2>
+  <p class="mt-4 max-w-[60ch] leading-relaxed text-muted">The real status of every part of the product, updated as each one ships.</p>
+
+  <div class="flex flex-col gap-4 mt-10">
+    @foreach(rows as row)
+      <div class="grid gap-3 grid-cols-1 md:gap-8 md:grid-cols-12 p-6 md:p-8 bg-tint rounded-2xl">
+        <h3 class="md:col-span-2 font-semibold text-ink text-xl tracking-tight">{{ row.label }}</h3>
+        <ul class="flex flex-wrap gap-2 md:col-span-10">
+          @foreach(row.items as item)
+            <li class="inline-flex gap-2 items-center px-4 h-10 text-ink text-sm bg-surface border border-line rounded-full">
+              <span class="{{ item.icon }} size-4 text-accent" aria-hidden="true"></span>
+              {{ item.title }}
+              <span class="text-muted">{{ item.statusText }}</span>
+            </li>
+          @endforeach
+        </ul>
+      </div>
+    @endforeach
+  </div>
+</section>

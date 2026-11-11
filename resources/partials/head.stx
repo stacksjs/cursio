@@ -1,0 +1,27 @@
+<script server>
+import { site } from '~/resources/data/site'
+
+// A page names itself by declaring these in its own server script; a page that
+// declares nothing describes the site.
+const headTitle = typeof pageTitle !== 'undefined' && pageTitle ? pageTitle : site.title
+const headDescription = typeof pageDescription !== 'undefined' && pageDescription ? pageDescription : site.description
+const headPath = typeof canonicalPath !== 'undefined' && canonicalPath ? canonicalPath : '/'
+const headUrl = `${site.url}${headPath === '/' ? '/' : headPath}`
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ headTitle }}</title>
+<meta name="description" content="{{ headDescription }}">
+<link rel="canonical" href="{{ headUrl }}">
+<meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ site.name }}">
+<meta property="og:title" content="{{ headTitle }}">
+<meta property="og:description" content="{{ headDescription }}">
+<meta property="og:url" content="{{ headUrl }}">
+<meta name="twitter:card" content="summary">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="/assets/styles/cursio.css">

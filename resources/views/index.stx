@@ -1,0 +1,16 @@
+@extends('layouts/marketing')
+@section('content')
+<script server>
+import { site } from '~/resources/data/site'
+
+const pageTitle = site.title
+const pageDescription = site.description
+const canonicalPath = '/'
+</script>
+<HomeHero />
+<FeatureBento />
+<HowItWorks />
+<StackCompare />
+<RoadmapList />
+<EarlyAccess />
+@endsection

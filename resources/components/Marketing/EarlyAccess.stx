@@ -1,0 +1,60 @@
+<script server>
+import { signupCta } from '~/resources/data/site'
+</script>
+<script client>
+const email = state('')
+const sending = state(false)
+const joined = state(false)
+const problem = state('')
+
+async function requestAccess() {
+  const address = email().trim()
+  if (!address.includes('@')) {
+    problem.set('Enter a valid email address.')
+    return
+  }
+
+  sending.set(true)
+  problem.set('')
+  try {
+    const response = await fetch('/api/email/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ email: address, source: 'early-access' }),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (response.ok && result.success !== false)
+      joined.set(true)
+    else
+      problem.set(result.message || 'That did not go through. Please try again.')
+  }
+  catch {
+    problem.set('We could not reach the server. Please try again.')
+  }
+  finally {
+    sending.set(false)
+  }
+}
+</script>
+<section id="early-access" class="mx-auto px-4 py-16 md:px-8 md:py-24 max-w-7xl">
+  <div class="px-6 py-12 md:px-12 md:py-16 bg-accent-soft rounded-2xl">
+    <div class="mx-auto max-w-xl text-center">
+      <h2 class="font-semibold text-3xl text-ink tracking-tight md:text-4xl">Be first into Cursio.</h2>
+      <p class="mt-4 leading-relaxed text-muted">Leave your email and we will write when your academy can go live.</p>
+
+      <form class="mt-8 text-left" :hidden="joined()" @submit.prevent="requestAccess()" novalidate>
+        <label for="early-access-email" class="block font-medium text-ink text-sm">Email address</label>
+        <div class="flex flex-col gap-3 sm:flex-row mt-2">
+          <input id="early-access-email" x-model.trim="email" type="email" name="email" autocomplete="email" required aria-describedby="early-access-help early-access-error" class="flex-1 px-4 h-12 text-ink bg-surface border border-line rounded-xl">
+          <button type="submit" class="inline-flex items-center justify-center px-6 h-12 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full disabled:opacity-60 transition-transform active:scale-[0.98]" :disabled="sending()">
+            <span x-text="sending() ? 'Sending' : '{{ signupCta.label }}'">{{ signupCta.label }}</span>
+          </button>
+        </div>
+        <p id="early-access-help" class="mt-2 text-muted text-sm">We confirm your address now and write again when access opens.</p>
+        <p id="early-access-error" class="mt-2 font-medium text-ink text-sm" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+      </form>
+
+      <p class="mt-8 font-medium text-ink" :hidden="!joined()" hidden role="status">You are on the list. We will be in touch when access opens.</p>
+    </div>
+  </div>
+</section>

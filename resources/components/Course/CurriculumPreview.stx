@@ -1,0 +1,82 @@
+<script server>
+/**
+ * A working course outline: tick a lesson and the progress bar moves. It is
+ * the same outline and the same behavior the learner view is built from, shown
+ * on the marketing site in place of a screenshot.
+ */
+import { demoCompleted, demoCourse } from '~/resources/data/demo-course'
+
+const kindIcon = {
+  video: 'i-hugeicons-play-circle',
+  reading: 'i-hugeicons-book-open-01',
+  quiz: 'i-hugeicons-help-circle',
+}
+
+// Each lesson carries its icon class, because a template cannot look one up
+// by a dynamic key.
+const outline = {
+  ...demoCourse,
+  sections: demoCourse.sections.map(section => ({
+    ...section,
+    lessons: section.lessons.map(lesson => ({ ...lesson, icon: kindIcon[lesson.kind] })),
+  })),
+}
+const lessonCount = outline.sections.reduce((total, section) => total + section.lessons.length, 0)
+// Interpolating a server value into the client script serializes it, so this
+// stays an array: stringifying it here would hand the client a string.
+const startIds = demoCompleted
+
+</script>
+<script client>
+const doneIds = state({{ startIds }})
+const lessonTotal = {{ lessonCount }}
+
+const doneCount = derived(() => doneIds().length)
+const donePercent = derived(() => Math.round((doneCount() / lessonTotal) * 100))
+
+function isDone(id) {
+  return doneIds().includes(id)
+}
+
+function toggleLesson(id) {
+  doneIds.update(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id])
+}
+</script>
+<section class="p-5 md:p-6 bg-surface border border-line rounded-2xl shadow-sm" aria-label="Course preview">
+  <div class="flex gap-4 items-center justify-between">
+    <div>
+      <h2 class="font-semibold text-ink text-lg tracking-tight">{{ outline.title }}</h2>
+      <p class="text-muted text-sm">{{ outline.instructor }}</p>
+    </div>
+    <div class="text-right">
+      <p class="font-semibold tabular-nums text-2xl text-ink tracking-tight"><span x-text="donePercent()">33</span>%</p>
+      <p class="text-muted text-xs"><span x-text="doneCount()">2</span> of {{ lessonCount }} lessons</p>
+    </div>
+  </div>
+
+  <div class="overflow-hidden mt-4 h-1.5 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="donePercent()" aria-label="Course progress">
+    <div class="h-full bg-accent rounded-full duration-300 transition-all" :style="`width: ${donePercent()}%`"></div>
+  </div>
+
+  <div class="flex flex-col gap-5 mt-5">
+    @foreach(outline.sections as section)
+      <div>
+        <h3 class="font-medium text-muted text-sm">{{ section.title }}</h3>
+        <ul class="flex flex-col gap-1 mt-2">
+          @foreach(section.lessons as lesson)
+            <li>
+              <button type="button" class="flex gap-3 items-center px-3 py-2.5 w-full text-left hover:bg-tint rounded-xl transition-colors" :aria-pressed="isDone('{{ lesson.id }}')" @click="toggleLesson('{{ lesson.id }}')">
+                <span class="shrink-0 size-5" :class="isDone('{{ lesson.id }}') ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-circle text-muted'" aria-hidden="true"></span>
+                <span class="flex-1 text-ink text-sm">{{ lesson.title }}</span>
+                <span class="{{ lesson.icon }} size-4 text-muted" aria-hidden="true"></span>
+                <span class="w-12 tabular-nums text-muted text-right text-xs">{{ lesson.minutes }} min</span>
+              </button>
+            </li>
+          @endforeach
+        </ul>
+      </div>
+    @endforeach
+  </div>
+
+  <p class="mt-4 text-muted text-xs">This outline is live. Tick a lesson to see progress update.</p>
+</section>

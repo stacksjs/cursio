@@ -1,0 +1,41 @@
+<script server>
+/**
+ * What running a course business on a self-hosted plugin setup usually takes.
+ * Kept general on purpose: it describes the shape of that setup, not any one
+ * product's feature list.
+ */
+const pieces = [
+  { icon: 'i-hugeicons-globe-02', label: 'Web hosting, backups and updates' },
+  { icon: 'i-hugeicons-layers-01', label: 'A course plugin' },
+  { icon: 'i-hugeicons-video-01', label: 'A video host' },
+  { icon: 'i-hugeicons-credit-card', label: 'A checkout or membership plugin' },
+  { icon: 'i-hugeicons-mail-send-01', label: 'An email tool' },
+  { icon: 'i-hugeicons-bubble-chat', label: 'A community plugin' },
+]
+</script>
+<section class="mx-auto px-4 py-16 md:px-8 md:py-24 max-w-7xl">
+  <h2 class="max-w-[24ch] font-semibold text-3xl text-ink tracking-tight md:text-4xl">One product in place of a plugin stack.</h2>
+
+  <div class="grid gap-4 grid-cols-1 md:grid-cols-2 mt-10">
+    <div class="p-6 md:p-8 border border-line rounded-2xl">
+      <h3 class="font-medium text-ink">A typical self-hosted setup</h3>
+      <ul class="grid gap-x-6 gap-y-4 grid-cols-1 sm:grid-cols-2 mt-5">
+        @foreach(pieces as piece)
+          <li class="flex gap-3 items-start text-muted">
+            <span class="{{ piece.icon }} size-5 shrink-0 mt-0.5" aria-hidden="true"></span>
+            <span>{{ piece.label }}</span>
+          </li>
+        @endforeach
+      </ul>
+      <p class="mt-6 text-muted text-sm">Six things to pay for, connect and keep in step.</p>
+    </div>
+
+    <div class="flex flex-col justify-between p-6 md:p-8 text-page bg-ink rounded-2xl">
+      <div>
+        <h3 class="font-medium">Cursio</h3>
+        <p class="mt-5 max-w-[30ch] font-semibold leading-tight text-2xl tracking-tight md:text-3xl">One account, one bill, nothing to patch.</p>
+      </div>
+      <p class="mt-8 text-sm">Each part ships on the roadmap below.</p>
+    </div>
+  </div>
+</section>

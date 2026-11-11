@@ -1,0 +1,18 @@
+<script server>
+const steps = [
+  { verb: 'Build', text: 'Outline the course, upload your video and add quizzes. Preview it exactly as a learner will see it.' },
+  { verb: 'Sell', text: 'Set a price or a membership, connect Stripe, and share the link to your academy.' },
+  { verb: 'Teach', text: 'Open enrollment or start a cohort. Progress, discussion and reminders run in the same place.' },
+]
+</script>
+<section id="how" class="mx-auto px-4 py-16 md:px-8 md:py-24 max-w-7xl">
+  <h2 class="font-semibold text-3xl text-ink tracking-tight md:text-4xl">From outline to first sale.</h2>
+  <div class="mt-10">
+    @foreach(steps as step)
+      <div class="grid gap-2 grid-cols-1 md:gap-8 md:grid-cols-12 py-8 border-line border-t">
+        <h3 class="md:col-span-4 font-semibold text-4xl text-ink tracking-tight md:text-5xl">{{ step.verb }}</h3>
+        <p class="md:col-span-8 md:pt-3 max-w-[56ch] leading-relaxed text-lg text-muted">{{ step.text }}</p>
+      </div>
+    @endforeach
+  </div>
+</section>

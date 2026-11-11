@@ -1,0 +1,83 @@
+/*
+ * Cursio design tokens.
+ *
+ * One neutral family (zinc) and one accent (pine green), each defined once
+ * here and exposed to ts-css through config/css.ts as `bg-surface`,
+ * `text-muted`, `border-line` and so on. The theme follows the operating
+ * system: the dark values live in the media block below, so no element needs a
+ * `dark:` twin.
+ *
+ * Shape rule, applied everywhere: buttons are full pills, cards and panels are
+ * 16px, inputs are 12px.
+ */
+:root {
+  color-scheme: light dark;
+  --page: #fafafa;
+  --surface: #ffffff;
+  --tint: #f4f4f5;
+  --ink: #18181b;
+  --muted: #52525b;
+  --line: #e4e4e7;
+  --accent: #047857;
+  --accent-ink: #ffffff;
+  --accent-soft: #ecfdf5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #09090b;
+    --surface: #131316;
+    --tint: #18181b;
+    --ink: #fafafa;
+    --muted: #a1a1aa;
+    --line: #27272a;
+    --accent: #34d399;
+    --accent-ink: #022c22;
+    --accent-soft: #06281f;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/*
+ * A component with a client script is wrapped in a scope element, which would
+ * otherwise become the containing block and stop the sticky header travelling.
+ */
+body > div[data-stx-scope] {
+  display: contents;
+}
+
+/* A quiet dot grid for one bento cell: texture without an image. */
+.dot-grid {
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

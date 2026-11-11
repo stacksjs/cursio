@@ -1,0 +1,21 @@
+<script server>
+import { signupCta } from '~/resources/data/site'
+</script>
+<section class="mx-auto pb-16 pt-12 px-4 md:pb-24 md:pt-20 md:px-8 max-w-7xl">
+  <div class="grid gap-10 grid-cols-1 items-center lg:gap-12 lg:grid-cols-12">
+    <div class="lg:col-span-6">
+      <h1 class="font-semibold leading-[1.05] text-4xl text-ink tracking-tight md:text-5xl">Run your online school in one place.</h1>
+      <p class="mt-5 max-w-[52ch] leading-relaxed text-lg text-muted">Cursio hosts your courses, video, checkout, cohorts and community together, on your own domain.</p>
+      <div class="flex flex-wrap gap-4 items-center mt-8">
+        <a href="{{ signupCta.href }}" class="inline-flex gap-2 items-center px-6 h-12 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full transition-transform active:scale-[0.98]">
+          {{ signupCta.label }}
+          <span class="size-5 i-hugeicons-arrow-right-02" aria-hidden="true"></span>
+        </a>
+        <a href="/#roadmap" class="inline-flex items-center px-5 h-12 font-medium text-ink whitespace-nowrap hover:bg-tint border border-line rounded-full transition-colors">See the roadmap</a>
+      </div>
+    </div>
+    <div class="lg:col-span-6">
+      <CurriculumPreview />
+    </div>
+  </div>
+</section>

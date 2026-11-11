@@ -1,0 +1,35 @@
+<script server>
+import { navLinks, signupCta, site } from '~/resources/data/site'
+</script>
+<script client>
+const navOpen = state(false)
+function toggleNav() { navOpen.update(open => !open) }
+function closeNav() { navOpen.set(false) }
+</script>
+<header class="sticky top-0 z-40 bg-page/85 border-b border-line backdrop-blur">
+  <nav class="flex gap-6 items-center justify-between mx-auto px-4 md:px-8 h-16 max-w-7xl" aria-label="Main">
+    <a href="/" class="font-semibold text-ink text-xl tracking-tight">{{ site.name }}</a>
+
+    <div class="hidden md:flex gap-8 items-center">
+      @foreach(navLinks as link)
+        <a href="{{ link.href }}" class="text-muted text-sm hover:text-ink transition-colors">{{ link.label }}</a>
+      @endforeach
+    </div>
+
+    <div class="flex gap-2 items-center">
+      <a href="{{ signupCta.href }}" class="hidden sm:inline-flex items-center px-4 h-10 font-medium text-accent-ink text-sm whitespace-nowrap bg-accent rounded-full transition-transform active:scale-[0.98]">{{ signupCta.label }}</a>
+      <button type="button" class="inline-flex md:hidden items-center justify-center size-10 text-ink border border-line rounded-full" aria-label="Menu" aria-controls="site-menu" :aria-expanded="navOpen()" @click="toggleNav()">
+        <span class="size-5" :class="navOpen() ? 'i-hugeicons-cancel-01' : 'i-hugeicons-menu-01'" aria-hidden="true"></span>
+      </button>
+    </div>
+  </nav>
+
+  <div id="site-menu" class="md:hidden px-4 py-4 bg-page border-line border-t" :hidden="!navOpen()" hidden>
+    <div class="flex flex-col gap-1">
+      @foreach(navLinks as link)
+        <a href="{{ link.href }}" class="py-3 text-base text-ink" @click="closeNav()">{{ link.label }}</a>
+      @endforeach
+      <a href="{{ signupCta.href }}" class="inline-flex items-center justify-center mt-2 px-4 h-11 font-medium text-accent-ink text-sm bg-accent rounded-full" @click="closeNav()">{{ signupCta.label }}</a>
+    </div>
+  </div>
+</header>

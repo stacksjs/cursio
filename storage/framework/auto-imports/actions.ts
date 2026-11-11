@@ -5,8 +5,20 @@
 // resolves. Values are paths rather than import thunks on purpose: thunks
 // would make every compilation that touches a name resolve every module.
 export const actions = {
+  'Actions/Learn/CatalogAction': '../../../app/Actions/Learn/CatalogAction.ts',
+  'Actions/Learn/CompleteLessonAction': '../../../app/Actions/Learn/CompleteLessonAction.ts',
+  'Actions/Learn/CourseShowAction': '../../../app/Actions/Learn/CourseShowAction.ts',
+  'Actions/Learn/EnrollAction': '../../../app/Actions/Learn/EnrollAction.ts',
+  'Actions/Learn/LessonShowAction': '../../../app/Actions/Learn/LessonShowAction.ts',
   'Actions/NotifyUser': '../../../app/Actions/NotifyUser.ts',
   'Actions/SendWelcomeEmail': '../../../app/Actions/SendWelcomeEmail.ts',
+  'Actions/Studio/AddLessonAction': '../../../app/Actions/Studio/AddLessonAction.ts',
+  'Actions/Studio/AddSectionAction': '../../../app/Actions/Studio/AddSectionAction.ts',
+  'Actions/Studio/CourseOutlineAction': '../../../app/Actions/Studio/CourseOutlineAction.ts',
+  'Actions/Studio/CreateAcademyAction': '../../../app/Actions/Studio/CreateAcademyAction.ts',
+  'Actions/Studio/CreateCourseAction': '../../../app/Actions/Studio/CreateCourseAction.ts',
+  'Actions/Studio/PublishCourseAction': '../../../app/Actions/Studio/PublishCourseAction.ts',
+  'Actions/Studio/StudioOverviewAction': '../../../app/Actions/Studio/StudioOverviewAction.ts',
   'Actions/AI/AskAction': '@stacksjs/defaults/app/Actions/AI/AskAction.ts',
   'Actions/AI/CompleteAction': '@stacksjs/defaults/app/Actions/AI/CompleteAction.ts',
   'Actions/AI/SummaryAction': '@stacksjs/defaults/app/Actions/AI/SummaryAction.ts',

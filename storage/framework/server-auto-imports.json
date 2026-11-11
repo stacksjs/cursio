@@ -1,5 +1,6 @@
 {
   "globals": {
+    "Academy": true,
     "Action": true,
     "Activity": true,
     "AnalyticsEvent": true,
@@ -29,6 +30,8 @@
     "Coupon": true,
     "Courier": true,
     "CourierPing": true,
+    "Course": true,
+    "CourseSection": true,
     "Customer": true,
     "DeliveryRoute": true,
     "DeliveryStop": true,
@@ -39,6 +42,7 @@
     "EmailListSubscriber": true,
     "EmailSuppression": true,
     "EmailWebhookEvent": true,
+    "Enrollment": true,
     "ErrorModel": true,
     "ExampleJob": true,
     "ExampleTwoJob": true,
@@ -56,6 +60,8 @@
     "Inspire": true,
     "Job": true,
     "Label": true,
+    "Lesson": true,
+    "LessonProgress": true,
     "LicenseKey": true,
     "Log": true,
     "LoyaltyPoint": true,

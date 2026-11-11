@@ -5,6 +5,18 @@
 
 declare module '@stacksjs/database' {
   interface DatabaseSchema {
+    academies: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      name: string
+      slug: string
+      tagline: string
+      status: "active" | "suspended"
+      team_id: number
+    }
     activities: {
       // columns
       id: number
@@ -519,6 +531,31 @@ declare module '@stacksjs/database' {
       last_ping_at: string
       user_id: number
     }
+    course_sections: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      title: string
+      position: number
+      team_id: number
+      course_id: number
+    }
+    courses: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      deleted_at: string | null
+      title: string
+      slug: string
+      summary: string
+      status: "draft" | "published" | "archived"
+      published_at: string
+      team_id: number
+      academy_id: number
+    }
     customers: {
       // columns
       id: number
@@ -676,6 +713,18 @@ declare module '@stacksjs/database' {
       provider: "mailgun" | "postmark" | "ses" | "sendgrid"
       event_id: string
       processed_at: string
+    }
+    enrollments: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      status: "active" | "completed" | "revoked"
+      source: "free" | "manual"
+      completed_at: string
+      user_id: number
+      course_id: number
     }
     errors: {
       // columns
@@ -851,6 +900,32 @@ declare module '@stacksjs/database' {
       board_id: number
       name: string
       color: string
+    }
+    lesson_progress: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      completed_at: string
+      user_id: number
+      enrollment_id: number
+      lesson_id: number
+    }
+    lessons: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      title: string
+      kind: "video" | "reading"
+      body: string
+      video_url: string
+      duration_seconds: number
+      position: number
+      team_id: number
+      course_id: number
+      course_section_id: number
     }
     license_keys: {
       // columns

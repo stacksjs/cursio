@@ -135,7 +135,9 @@ export default {
      *
      * Override for one run with `STACKS_INCLUDE_FRAMEWORK_MODELS=1`.
      */
-    includeFrameworkDefaults: false,
+    // Cursio is built on the built-in models (User, Team, Site, Subscriber,
+    // commerce) alongside its own, so both are generated.
+    includeFrameworkDefaults: true,
   },
 
   /**

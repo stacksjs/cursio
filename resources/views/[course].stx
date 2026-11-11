@@ -1,0 +1,27 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+/**
+ * A Course at the root of an Academy's own host: `harbor.cursio.org/learn-stacks`.
+ * On Cursio's own host there is no Academy, so this matches nothing and is a 404.
+ */
+import { academyForSite } from '~/app/Support/academies'
+import { outlineOf, publishedCourse } from '~/app/Support/courses'
+
+const courseSlug = typeof course !== 'undefined' ? String(course) : ''
+const school = await academyForSite(requestContext.site())
+const academyHome = '/'
+const found = school ? await publishedCourse(school.id, courseSlug) : null
+if (!found)
+  notFound()
+
+const outline = found ? await outlineOf(found.id) : { sections: [], lessonIds: [] }
+const lessonTotal = outline.lessonIds.length
+const apiPath = school ? `/api/learn/${school.slug}/courses/${courseSlug}` : ''
+const returnPath = academyHome === '/' ? `/${courseSlug}` : `${academyHome}/${courseSlug}`
+const pageTitle = found ? `${found.title} - ${school.name}` : 'Course not found'
+const pageDescription = found?.summary || ''
+const canonicalPath = returnPath
+</script>
+@include('course-player')
+@endsection

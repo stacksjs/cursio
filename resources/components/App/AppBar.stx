@@ -1,3 +1,11 @@
+<script>
+interface Props {
+  /** What the bar is titled: Cursio on the platform, the Academy on its own host. */
+  title?: string
+  home?: string
+}
+const { title = 'Cursio', home = '/' } = defineProps<Props>()
+</script>
 <script client>
 import { useAuth } from '~/storage/framework/defaults/functions/auth'
 
@@ -9,9 +17,9 @@ onMount(() => {
 </script>
 <header class="sticky top-0 z-40 bg-page/85 border-b border-line backdrop-blur">
   <nav class="flex gap-6 items-center justify-between mx-auto px-4 md:px-8 h-16 max-w-5xl" aria-label="App">
-    <a href="/" class="font-semibold text-ink text-xl tracking-tight">Cursio</a>
+    <a href="{{ home }}" class="font-semibold text-ink text-xl tracking-tight">{{ title }}</a>
     <div class="flex gap-6 items-center text-sm">
-      <a href="/studio" class="text-muted hover:text-ink transition-colors">Studio</a>
+      <a href="/studio" class="text-muted hover:text-ink transition-colors" :hidden="!signedIn()" hidden>Studio</a>
       <a href="/login" class="text-muted hover:text-ink transition-colors" :hidden="signedIn()">Sign in</a>
     </div>
   </nav>

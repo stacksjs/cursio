@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db } from '@stacksjs/database'
-import { academiesForStaff, AcademyError, academyForStaff, createAcademy } from '../../app/Support/academies'
+import { academiesForStaff, AcademyError, academyForSite, academyForStaff, createAcademy } from '../../app/Support/academies'
 import { addLesson, addSection, courseInAcademy, CourseError, createCourse, outlineOf, publishCourse, publishedCourse, publishedCourses } from '../../app/Support/courses'
 import { completeLesson, enroll, EnrollmentError, enrollmentOf, progressOf } from '../../app/Support/enrollment'
 
@@ -53,6 +53,7 @@ afterAll(async () => {
       await db.deleteFrom('courses').where('id', 'in', courseIds).execute()
     }
     await db.deleteFrom('academies').where('team_id', 'in', teamIds).execute()
+    await db.deleteFrom('sites').where('team_id', 'in', teamIds).execute()
     await db.deleteFrom('team_members').where('team_id', 'in', teamIds).execute()
     await db.deleteFrom('teams').where('id', 'in', teamIds).execute()
   }
@@ -67,6 +68,18 @@ describe('opening an academy', () => {
 
     expect(academy.slug).toBe(`harbor-${stamp}`)
     expect((await academiesForStaff(owner)).map(row => row.id)).toEqual([academy.id])
+  })
+
+  test('the academy answers on its own host', async () => {
+    // The host resolver turns `harbor-x.cursio.org` into a Site; the Site's
+    // subdomain is the Academy's slug.
+    const site = await db.selectFrom('sites').select(['subdomain', 'team_id']).where('subdomain', '=', `harbor-${stamp}`).executeTakeFirst() as { subdomain: string, team_id: number }
+    const academy = await academyForSite(site)
+
+    expect(site.team_id).toBe(teamIds[0])
+    expect(academy?.slug).toBe(`harbor-${stamp}`)
+    expect(await academyForSite(null)).toBeNull()
+    expect(await academyForSite({ subdomain: 'no-such-academy' })).toBeNull()
   })
 
   test('refuses a reserved or malformed address', async () => {

@@ -1,16 +1,32 @@
 @extends('layouts/marketing')
 @section('content')
 <script server>
+import { academyForSite } from '~/app/Support/academies'
+import { publishedCourses } from '~/app/Support/courses'
 import { site } from '~/resources/data/site'
 
-const pageTitle = site.title
-const pageDescription = site.description
+// One address, two meanings: on an Academy's own host `/` is that Academy's
+// catalog; on Cursio's host it is the marketing page. The layout reads
+// `school` too and swaps its chrome, because a view has one layout and cannot
+// choose between two.
+const school = await academyForSite(requestContext.site())
+const courses = school ? await publishedCourses(school.id) : []
+const academyHome = '/'
+
+const pageTitle = school ? school.name : site.title
+const pageDescription = school ? (school.tagline || `Courses from ${school.name}.`) : site.description
 const canonicalPath = '/'
 </script>
-<HomeHero />
-<FeatureBento />
-<HowItWorks />
-<StackCompare />
-<RoadmapList />
-<EarlyAccess />
+@if(school)
+  <div class="mx-auto px-4 py-10 md:px-8 max-w-5xl">
+    @include('academy-home')
+  </div>
+@else
+  <HomeHero />
+  <FeatureBento />
+  <HowItWorks />
+  <StackCompare />
+  <RoadmapList />
+  <EarlyAccess />
+@endif
 @endsection

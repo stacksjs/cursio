@@ -7,157 +7,18 @@ import { outlineOf, publishedCourse } from '~/app/Support/courses'
 const academySlug = typeof academy !== 'undefined' ? String(academy) : ''
 const courseSlug = typeof course !== 'undefined' ? String(course) : ''
 const school = academySlug ? await academyBySlug(academySlug) : null
+const academyHome = `/a/${academySlug}`
 const found = school ? await publishedCourse(school.id, courseSlug) : null
 if (!found)
   notFound()
 
 const outline = found ? await outlineOf(found.id) : { sections: [], lessonIds: [] }
 const lessonTotal = outline.lessonIds.length
-const apiPath = `/api/learn/${academySlug}/courses/${courseSlug}`
-const returnPath = `/a/${academySlug}/${courseSlug}`
+const apiPath = school ? `/api/learn/${school.slug}/courses/${courseSlug}` : ''
+const returnPath = academyHome === '/' ? `/${courseSlug}` : `${academyHome}/${courseSlug}`
 const pageTitle = found ? `${found.title} - ${school.name}` : 'Course not found'
 const pageDescription = found?.summary || ''
 const canonicalPath = returnPath
 </script>
-<script client>
-import { useAuth } from '~/storage/framework/defaults/functions/auth'
-import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
-
-const coursePath = {{ apiPath }}
-const total = {{ lessonTotal }}
-
-const signedIn = state(false)
-const enrolled = state(false)
-const doneIds = state([])
-const openLesson = state(null)
-const busy = state(false)
-const problem = state('')
-
-const percent = derived(() => total === 0 ? 0 : Math.round((doneIds().length / total) * 100))
-const finished = derived(() => total > 0 && doneIds().length === total)
-
-function isDone(lessonId) {
-  return doneIds().includes(lessonId)
-}
-
-async function load() {
-  signedIn.set(Boolean(useAuth().getToken()))
-  if (!signedIn())
-    return
-  try {
-    const data = await dashboardApi(`${coursePath}/progress`)
-    enrolled.set(data.enrolled)
-    doneIds.set(data.progress?.completedIds ?? [])
-  }
-  catch {
-    // Signed-out or expired: the page still shows the public outline.
-    signedIn.set(false)
-  }
-}
-
-async function enrollNow() {
-  busy.set(true)
-  problem.set('')
-  try {
-    const data = await dashboardApi(`${coursePath}/enroll`, { method: 'POST', body: {} })
-    enrolled.set(true)
-    doneIds.set(data.progress.completedIds)
-  }
-  catch (error) {
-    problem.set(error?.message || 'Enrollment did not go through.')
-  }
-  busy.set(false)
-}
-
-async function open(lessonId) {
-  if (!enrolled())
-    return
-  problem.set('')
-  try {
-    const data = await dashboardApi(`/api/learn/lessons/${lessonId}`)
-    openLesson.set(data.lesson)
-  }
-  catch (error) {
-    problem.set(error?.message || 'This lesson could not be opened.')
-  }
-}
-
-async function complete() {
-  const lesson = openLesson()
-  if (!lesson)
-    return
-  busy.set(true)
-  try {
-    const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/complete`, { method: 'POST', body: {} })
-    doneIds.set(data.progress.completedIds)
-    openLesson.set({ ...lesson, completed: true })
-    if (data.progress.nextLessonId)
-      await open(data.progress.nextLessonId)
-  }
-  catch (error) {
-    problem.set(error?.message || 'That did not save.')
-  }
-  busy.set(false)
-}
-
-onMount(load)
-</script>
-<template>
-<div data-stx-content>
-@if(found)
-  <a href="/a/{{ school.slug }}" class="text-muted text-sm hover:text-ink">{{ school.name }}</a>
-  <h1 class="mt-3 font-semibold text-4xl text-ink tracking-tight">{{ found.title }}</h1>
-  @if(found.summary)
-    <p class="mt-3 max-w-[60ch] text-lg text-muted">{{ found.summary }}</p>
-  @endif
-
-  <div class="flex flex-wrap gap-3 items-center mt-6" :hidden="enrolled()">
-    <a href="/login?redirect={{ returnPath }}" class="inline-flex items-center px-6 h-12 font-medium text-accent-ink bg-accent rounded-full" :hidden="signedIn()">Sign in to enroll</a>
-    <button type="button" class="inline-flex items-center px-6 h-12 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="!signedIn()" hidden :disabled="busy()" @click="enrollNow()">Enroll for free</button>
-  </div>
-
-  <div class="mt-6" :hidden="!enrolled()" hidden>
-    <p class="text-ink"><span class="font-semibold tabular-nums" x-text="percent()">0</span>% complete</p>
-    <div class="overflow-hidden mt-2 h-1.5 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="percent()" aria-label="Course progress">
-      <div class="h-full bg-accent rounded-full duration-300 transition-all" :style="`width: ${percent()}%`"></div>
-    </div>
-    <p class="mt-3 font-medium text-ink" :hidden="!finished()" hidden role="status">You have completed this course.</p>
-  </div>
-
-  <p class="mt-4 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
-
-  <div class="grid gap-8 grid-cols-1 lg:grid-cols-12 mt-10">
-    <div class="flex flex-col gap-6 lg:col-span-5">
-      @foreach(outline.sections as section)
-        <div>
-          <h2 class="font-medium text-muted text-sm">{{ section.title }}</h2>
-          <ul class="flex flex-col gap-1 mt-2">
-            @foreach(section.lessons as lesson)
-              <li>
-                <button type="button" class="flex gap-3 items-center px-3 py-2.5 w-full text-left hover:bg-tint rounded-xl transition-colors" :class="openLesson()?.id === {{ lesson.id }} ? 'bg-tint' : ''" @click="open({{ lesson.id }})">
-                  <span class="shrink-0 size-5" :class="isDone({{ lesson.id }}) ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-circle text-muted'" aria-hidden="true"></span>
-                  <span class="flex-1 text-ink text-sm">{{ lesson.title }}</span>
-                </button>
-              </li>
-            @endforeach
-          </ul>
-        </div>
-      @endforeach
-    </div>
-
-    <div class="lg:col-span-7">
-      <p class="p-6 text-muted bg-tint rounded-2xl" :hidden="openLesson() !== null">{{ enrolled() ? 'Pick a lesson to begin.' : 'Enroll to open the lessons.' }}</p>
-      <article class="p-6 bg-surface border border-line rounded-2xl" :hidden="openLesson() === null" hidden>
-        <h2 class="font-semibold text-2xl text-ink tracking-tight">{{ openLesson()?.title }}</h2>
-        <video class="mt-4 w-full rounded-xl" controls :hidden="!openLesson()?.video_url" hidden :src="openLesson()?.video_url || ''"></video>
-        <p class="mt-4 leading-relaxed text-ink whitespace-pre-line">{{ openLesson()?.body || '' }}</p>
-        <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
-      </article>
-    </div>
-  </div>
-@else
-  <h1 class="font-semibold text-3xl text-ink tracking-tight">Course not found</h1>
-@endif
-</div>
-</template>
+@include('course-player')
 @endsection

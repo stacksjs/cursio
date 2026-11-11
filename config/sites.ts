@@ -11,16 +11,16 @@ import { env } from '@stacksjs/env'
  * the resolver.
  */
 export default {
-  enabled: false,
+  enabled: true,
 
   /** Subdomains of this domain are site slugs: `stmarks.` + baseDomain. */
-  baseDomain: env.APP_URL ?? 'stacks.localhost',
+  baseDomain: String(env.SITES_BASE_DOMAIN ?? env.APP_URL ?? 'cursio.localhost'),
 
   /**
    * Hosts that are the app itself (marketing site, dashboard, localhost) -
    * they resolve no site and are exempt from `strict`.
    */
-  platformHosts: ['localhost', 'stacks.localhost'],
+  platformHosts: ['localhost', 'cursio.localhost', 'cursio.org', 'www.cursio.org'],
 
   /** 404 requests whose host matches neither a site nor a platform host. */
   strict: false,

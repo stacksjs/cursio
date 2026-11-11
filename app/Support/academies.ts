@@ -46,13 +46,17 @@ export async function createAcademy(input: { ownerId: number, name: string, slug
     throw new AcademyError('That address is not available.')
 
   const taken = await db.selectFrom('academies').select(['id']).where('slug', '=', slug).executeTakeFirst()
-  if (taken)
+  const siteTaken = await db.selectFrom('sites').select(['id']).where('subdomain', '=', slug).executeTakeFirst()
+  if (taken || siteTaken)
     throw new AcademyError('That address is already taken.')
 
   return await db.transaction(async (tx: any) => {
     // Team names are unique across the app, so the slug (also unique) rides in it.
     const team = await tx.insertInto('teams').values({ name: `${name} (${slug})`, status: 'active', uuid: crypto.randomUUID() }).returning(['id']).executeTakeFirst() as { id: number }
     await tx.insertInto('team_members').values({ team_id: team.id, user_id: input.ownerId, role: 'owner', status: 'active', uuid: crypto.randomUUID() }).execute()
+    // The Site is what the host resolver finds: `{slug}.cursio.org` becomes
+    // this Academy. Its subdomain and the Academy's slug are the same value.
+    await tx.insertInto('sites').values({ team_id: team.id, name, subdomain: slug, status: 'active', uuid: crypto.randomUUID() }).execute()
     const academy = await tx.insertInto('academies').values({ team_id: team.id, name, slug, status: 'active', uuid: crypto.randomUUID() }).returning(['id']).executeTakeFirst() as { id: number }
 
     return { id: academy.id, team_id: team.id, name, slug, tagline: null, status: 'active' }
@@ -84,4 +88,12 @@ export async function academyForStaff(userId: number, academyId?: number | null)
 export async function academyBySlug(slug: string): Promise<AcademyRow | null> {
   const row = await db.selectFrom('academies').select([...columns]).where('slug', '=', slug).where('status', '=', 'active').executeTakeFirst() as AcademyRow | undefined
   return row ?? null
+}
+
+/**
+ * The Academy a tenant host stands for. The resolver has already turned the
+ * host into a Site; the Site's subdomain is the Academy's slug.
+ */
+export async function academyForSite(site: { subdomain?: string } | null | undefined): Promise<AcademyRow | null> {
+  return site?.subdomain ? await academyBySlug(site.subdomain) : null
 }

@@ -1,9 +1,15 @@
+<script server>
+// A page on an Academy's own host, or under /a/{academy}, declares `school`;
+// the bar then carries the Academy's name instead of Cursio's.
+const barTitle = typeof school !== 'undefined' && school ? school.name : 'Cursio'
+const barHome = typeof academyHome !== 'undefined' && academyHome ? academyHome : '/'
+</script>
 <!DOCTYPE html>
 <html lang="en">
 <head>@include('head')</head>
 <body class="min-h-[100dvh] font-sans text-ink bg-page">
   <a href="#main" class="focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:px-4 focus:py-2 focus:text-ink focus:bg-surface focus:rounded-full sr-only focus:not-sr-only">Skip to content</a>
-  <AppBar />
+  <AppBar title="{{ barTitle }}" home="{{ barHome }}" />
   <main id="main" tabindex="-1" class="mx-auto px-4 py-10 md:px-8 max-w-5xl">
     @yield('content')
   </main>

@@ -1,13 +1,24 @@
+<script server>
+// The home page is also an Academy's front door on its own host. When the page
+// declares `school`, the Academy's bar replaces Cursio's nav and footer.
+const tenantName = typeof school !== 'undefined' && school ? school.name : ''
+</script>
 <!DOCTYPE html>
 <html lang="en">
 <head>@include('head')</head>
 <body class="min-h-[100dvh] font-sans text-ink bg-page">
   <a href="#main" class="focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:px-4 focus:py-2 focus:text-ink focus:bg-surface focus:rounded-full sr-only focus:not-sr-only">Skip to content</a>
-  <SiteNav />
+  @if(tenantName)
+    <AppBar title="{{ tenantName }}" home="/" />
+  @else
+    <SiteNav />
+  @endif
   <main id="main" tabindex="-1">
     @yield('content')
   </main>
-  <SiteFooter />
+  @if(!tenantName)
+    <SiteFooter />
+  @endif
   @stack('scripts')
 </body>
 </html>

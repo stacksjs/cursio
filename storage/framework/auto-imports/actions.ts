@@ -7,6 +7,7 @@
 export const actions = {
   'Actions/Learn/CatalogAction': '../../../app/Actions/Learn/CatalogAction.ts',
   'Actions/Learn/CompleteLessonAction': '../../../app/Actions/Learn/CompleteLessonAction.ts',
+  'Actions/Learn/CourseProgressAction': '../../../app/Actions/Learn/CourseProgressAction.ts',
   'Actions/Learn/CourseShowAction': '../../../app/Actions/Learn/CourseShowAction.ts',
   'Actions/Learn/EnrollAction': '../../../app/Actions/Learn/EnrollAction.ts',
   'Actions/Learn/LessonShowAction': '../../../app/Actions/Learn/LessonShowAction.ts',

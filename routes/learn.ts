@@ -7,6 +7,7 @@ import { route } from '@stacksjs/router'
  */
 route.get('/{academy}/courses', 'Actions/Learn/CatalogAction')
 route.get('/{academy}/courses/{course}', 'Actions/Learn/CourseShowAction')
+route.get('/{academy}/courses/{course}/progress', 'Actions/Learn/CourseProgressAction').middleware('auth')
 route.post('/{academy}/courses/{course}/enroll', 'Actions/Learn/EnrollAction').middleware('auth')
 route.get('/lessons/{id}', 'Actions/Learn/LessonShowAction').middleware('auth')
 route.post('/lessons/{id}/complete', 'Actions/Learn/CompleteLessonAction').middleware('auth')

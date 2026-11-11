@@ -1,0 +1,126 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+const pageTitle = 'Studio - Cursio'
+const canonicalPath = '/studio'
+</script>
+<script client>
+import { useAuth } from '~/storage/framework/defaults/functions/auth'
+import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
+
+const loading = state(true)
+const signedIn = state(true)
+const academy = state(null)
+const courses = state([])
+const problem = state('')
+const busy = state(false)
+
+const academyName = state('')
+const academySlug = state('')
+const courseTitle = state('')
+
+async function load() {
+  if (!useAuth().getToken()) {
+    signedIn.set(false)
+    loading.set(false)
+    return
+  }
+  try {
+    const data = await dashboardApi('/api/studio')
+    academy.set(data.academy)
+    courses.set(data.courses)
+  }
+  catch (error) {
+    if (error?.status === 401)
+      signedIn.set(false)
+    else
+      problem.set(error?.message || 'The studio could not be loaded.')
+  }
+  loading.set(false)
+}
+
+async function openAcademy() {
+  busy.set(true)
+  problem.set('')
+  try {
+    await dashboardApi('/api/studio/academies', { method: 'POST', body: { name: academyName(), slug: academySlug() || undefined } })
+    await load()
+  }
+  catch (error) {
+    problem.set(error?.message || 'The academy could not be created.')
+  }
+  busy.set(false)
+}
+
+async function createCourse() {
+  busy.set(true)
+  problem.set('')
+  try {
+    const data = await dashboardApi('/api/studio/courses', { method: 'POST', body: { title: courseTitle(), academy_id: academy().id } })
+    navigate(`/studio/courses/${data.course.id}`)
+  }
+  catch (error) {
+    problem.set(error?.message || 'The course could not be created.')
+  }
+  busy.set(false)
+}
+
+onMount(load)
+</script>
+<template>
+<div data-stx-content>
+  <h1 class="font-semibold text-3xl text-ink tracking-tight">Studio</h1>
+
+  <p class="mt-6 text-muted" :hidden="!loading()">Loading your academy.</p>
+
+  <div class="mt-6 p-6 bg-surface border border-line rounded-2xl" :hidden="loading() || signedIn()" hidden>
+    <p class="text-ink">Sign in to build your academy.</p>
+    <div class="flex flex-wrap gap-3 mt-4">
+      <a href="/login?redirect=/studio" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full">Sign in</a>
+      <a href="/register?redirect=/studio" class="inline-flex items-center px-5 h-11 font-medium text-ink border border-line rounded-full">Create an account</a>
+    </div>
+  </div>
+
+  <p class="mt-6 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+
+  <form class="mt-6 p-6 bg-surface border border-line rounded-2xl" :hidden="loading() || !signedIn() || academy() !== null" hidden @submit.prevent="openAcademy()">
+    <h2 class="font-semibold text-ink text-xl tracking-tight">Open your academy</h2>
+    <div class="grid gap-4 grid-cols-1 md:grid-cols-2 mt-5">
+      <div>
+        <label for="academy-name" class="block font-medium text-ink text-sm">Name</label>
+        <input id="academy-name" x-model.trim="academyName" type="text" required class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+      </div>
+      <div>
+        <label for="academy-slug" class="block font-medium text-ink text-sm">Address</label>
+        <input id="academy-slug" x-model.trim="academySlug" type="text" aria-describedby="academy-slug-help" class="mt-2 px-4 h-11 w-full font-mono text-ink bg-surface border border-line rounded-xl">
+        <p id="academy-slug-help" class="mt-2 text-muted text-sm">Lowercase letters, numbers and hyphens. Leave empty to use the name.</p>
+      </div>
+    </div>
+    <button type="submit" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">Open academy</button>
+  </form>
+
+  <div :hidden="academy() === null" hidden>
+    <p class="mt-2 text-muted">{{ academy()?.name }} <span class="font-mono text-sm">/a/{{ academy()?.slug }}</span></p>
+
+    <form class="flex flex-col gap-3 sm:flex-row sm:items-end mt-8" @submit.prevent="createCourse()">
+      <div class="flex-1">
+        <label for="course-title" class="block font-medium text-ink text-sm">New course</label>
+        <input id="course-title" x-model.trim="courseTitle" type="text" required class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+      </div>
+      <button type="submit" class="inline-flex items-center justify-center px-5 h-11 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full disabled:opacity-60" :disabled="busy()">Create course</button>
+    </form>
+
+    <p class="mt-8 text-muted" :hidden="courses().length > 0">No courses yet. Name your first one above.</p>
+
+    <ul class="flex flex-col gap-3 mt-8">
+      <li :for="course in courses()">
+        <a :href="`/studio/courses/${course.id}`" class="flex gap-4 items-center justify-between p-5 bg-surface hover:bg-tint border border-line rounded-2xl transition-colors">
+          <span class="font-medium text-ink">{{ course.title }}</span>
+          <span class="text-muted text-sm">{{ course.status === 'published' ? 'Published' : 'Draft' }}</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</div>
+</template>
+@endsection

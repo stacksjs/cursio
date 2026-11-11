@@ -1,0 +1,157 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+const pageTitle = 'Course - Cursio Studio'
+const courseId = typeof id !== 'undefined' ? Number(id) : 0
+</script>
+<script client>
+import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
+
+const editingId = {{ courseId }}
+
+const loading = state(true)
+const course = state(null)
+const sections = state([])
+const problem = state('')
+const busy = state(false)
+
+const sectionTitle = state('')
+const lessonSection = state('')
+const lessonTitle = state('')
+const lessonKind = state('reading')
+const lessonBody = state('')
+const lessonVideo = state('')
+
+const lessonCount = derived(() => sections().reduce((total, section) => total + section.lessons.length, 0))
+const published = derived(() => course()?.status === 'published')
+
+async function load() {
+  try {
+    const data = await dashboardApi(`/api/studio/courses/${editingId}`)
+    course.set(data.course)
+    sections.set(data.outline.sections)
+    if (!lessonSection() && data.outline.sections.length > 0)
+      lessonSection.set(String(data.outline.sections[0].id))
+  }
+  catch (error) {
+    problem.set(error?.status === 401 ? 'Sign in to edit this course.' : (error?.message || 'This course could not be loaded.'))
+  }
+  loading.set(false)
+}
+
+async function send(path, body) {
+  busy.set(true)
+  problem.set('')
+  try {
+    await dashboardApi(`/api/studio/courses/${editingId}/${path}`, { method: 'POST', body })
+    await load()
+    return true
+  }
+  catch (error) {
+    problem.set(error?.message || 'That did not save.')
+    return false
+  }
+  finally {
+    busy.set(false)
+  }
+}
+
+async function addSection() {
+  if (await send('sections', { title: sectionTitle() }))
+    sectionTitle.set('')
+}
+
+async function addLesson() {
+  const saved = await send('lessons', {
+    section_id: Number(lessonSection()),
+    title: lessonTitle(),
+    kind: lessonKind(),
+    body: lessonBody(),
+    video_url: lessonVideo(),
+  })
+  if (saved) {
+    lessonTitle.set('')
+    lessonBody.set('')
+    lessonVideo.set('')
+  }
+}
+
+function togglePublish() {
+  return send('publish', published() ? { unpublish: true } : {})
+}
+
+onMount(load)
+</script>
+<template>
+<div data-stx-content>
+  <a href="/studio" class="text-muted text-sm hover:text-ink">Back to studio</a>
+
+  <p class="mt-6 text-muted" :hidden="!loading()">Loading the course.</p>
+  <p class="mt-6 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+
+  <div :hidden="course() === null" hidden>
+    <div class="flex flex-wrap gap-4 items-center justify-between mt-4">
+      <div>
+        <h1 class="font-semibold text-3xl text-ink tracking-tight">{{ course()?.title }}</h1>
+        <p class="mt-1 text-muted text-sm">{{ published() ? 'Published' : 'Draft' }}, {{ lessonCount() }} {{ lessonCount() === 1 ? 'lesson' : 'lessons' }}</p>
+      </div>
+      <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full disabled:opacity-60" :disabled="busy()" @click="togglePublish()">{{ published() ? 'Return to draft' : 'Publish course' }}</button>
+    </div>
+
+    <div class="flex flex-col gap-4 mt-8">
+      <section :for="section in sections()" class="p-5 bg-surface border border-line rounded-2xl">
+        <h2 class="font-medium text-ink">{{ section.title }}</h2>
+        <p class="mt-2 text-muted text-sm" :hidden="section.lessons.length > 0">No lessons in this section yet.</p>
+        <ul class="flex flex-col gap-1 mt-3">
+          <li :for="lesson in section.lessons" class="flex gap-3 items-center px-3 py-2 rounded-xl">
+            <span class="size-4 text-muted" :class="lesson.kind === 'video' ? 'i-hugeicons-play-circle' : 'i-hugeicons-book-open-01'" aria-hidden="true"></span>
+            <span class="text-ink text-sm">{{ lesson.title }}</span>
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <form class="flex flex-col gap-3 sm:flex-row sm:items-end mt-8" @submit.prevent="addSection()">
+      <div class="flex-1">
+        <label for="section-title" class="block font-medium text-ink text-sm">New section</label>
+        <input id="section-title" x-model.trim="sectionTitle" type="text" required class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+      </div>
+      <button type="submit" class="inline-flex items-center justify-center px-5 h-11 font-medium text-ink whitespace-nowrap border border-line rounded-full disabled:opacity-60" :disabled="busy()">Add section</button>
+    </form>
+
+    <form class="mt-8 p-6 bg-tint rounded-2xl" :hidden="sections().length === 0" hidden @submit.prevent="addLesson()">
+      <h2 class="font-semibold text-ink text-xl tracking-tight">New lesson</h2>
+      <div class="grid gap-4 grid-cols-1 md:grid-cols-3 mt-5">
+        <div>
+          <label for="lesson-section" class="block font-medium text-ink text-sm">Section</label>
+          <select id="lesson-section" x-model="lessonSection" class="mt-2 px-3 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+            <option :for="section in sections()" :value="String(section.id)">{{ section.title }}</option>
+          </select>
+        </div>
+        <div>
+          <label for="lesson-title" class="block font-medium text-ink text-sm">Title</label>
+          <input id="lesson-title" x-model.trim="lessonTitle" type="text" required class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        </div>
+        <div>
+          <label for="lesson-kind" class="block font-medium text-ink text-sm">Type</label>
+          <select id="lesson-kind" x-model="lessonKind" class="mt-2 px-3 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+            <option value="reading">Reading</option>
+            <option value="video">Video</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-4" :hidden="lessonKind() !== 'video'" hidden>
+        <label for="lesson-video" class="block font-medium text-ink text-sm">Video link</label>
+        <input id="lesson-video" x-model.trim="lessonVideo" type="url" aria-describedby="lesson-video-help" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        <p id="lesson-video-help" class="mt-2 text-muted text-sm">An https link to the video file. Uploads arrive with the media library.</p>
+      </div>
+      <div class="mt-4">
+        <label for="lesson-body" class="block font-medium text-ink text-sm">Content</label>
+        <textarea id="lesson-body" x-model="lessonBody" rows="6" class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
+      </div>
+      <button type="submit" class="inline-flex items-center mt-5 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">Add lesson</button>
+    </form>
+  </div>
+</div>
+</template>
+@endsection

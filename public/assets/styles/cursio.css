@@ -63,6 +63,15 @@ body > div[data-stx-scope] {
   display: contents;
 }
 
+/*
+ * `hidden` must win. A utility such as `flex` or `inline-flex` sets `display`
+ * with the same weight as the browser's own `[hidden]` rule and comes later,
+ * so without this a hidden button with a display class stays on screen.
+ */
+[hidden] {
+  display: none !important;
+}
+
 /* A quiet dot grid for one bento cell: texture without an image. */
 .dot-grid {
   background-image: radial-gradient(var(--line) 1px, transparent 1px);

@@ -30,6 +30,14 @@ const envSchema = defineEnv({
     default: 'base64:1234567890',
   },
 
+  // The domain Academy subdomains hang off: `{slug}.` + this. Unset, it is
+  // APP_URL, which is right locally and wrong the day the app and the
+  // Academies live on different domains.
+  SITES_BASE_DOMAIN: {
+    validation: schema.string(),
+    default: '',
+  },
+
   LOGHQ_KEY: {
     validation: schema.string(),
     default: '',

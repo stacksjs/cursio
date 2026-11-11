@@ -14,7 +14,7 @@ export default {
   enabled: true,
 
   /** Subdomains of this domain are site slugs: `stmarks.` + baseDomain. */
-  baseDomain: String(env.SITES_BASE_DOMAIN ?? env.APP_URL ?? 'cursio.localhost'),
+  baseDomain: String(env.SITES_BASE_DOMAIN || env.APP_URL || 'cursio.localhost'),
 
   /**
    * Hosts that are the app itself (marketing site, dashboard, localhost) -

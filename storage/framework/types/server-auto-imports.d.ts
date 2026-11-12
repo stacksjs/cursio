@@ -68,6 +68,7 @@ declare global {
   const Lesson: typeof import('../../../app/Models/Lesson')['default']
   const LessonProgress: typeof import('../../../app/Models/LessonProgress')['default']
   const Question: typeof import('../../../app/Models/Question')['default']
+  const QuestionBank: typeof import('../../../app/Models/QuestionBank')['default']
   const QuestionOption: typeof import('../../../app/Models/QuestionOption')['default']
   const Quiz: typeof import('../../../app/Models/Quiz')['default']
   const QuizAttempt: typeof import('../../../app/Models/QuizAttempt')['default']

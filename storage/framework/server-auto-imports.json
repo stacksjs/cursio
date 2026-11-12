@@ -102,6 +102,7 @@
     "QueryController": true,
     "QueryLog": true,
     "Question": true,
+    "QuestionBank": true,
     "QuestionOption": true,
     "QueueWorker": true,
     "Quiz": true,

@@ -21,11 +21,15 @@
     },
     "packages/academy": {
       "name": "@cursio/academy",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "peerDependencies": {
         "@stacksjs/env": ">=0.75.0",
         "@stacksjs/router": ">=0.75.0",
       },
+      "optionalPeers": [
+        "@stacksjs/env",
+        "@stacksjs/router",
+      ],
     },
     "packages/cursio": {
       "name": "cursio",

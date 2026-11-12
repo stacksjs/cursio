@@ -26,7 +26,8 @@
     "components",
     "routes",
     "styles",
-    "README.md"
+    "README.md",
+    "LICENSE.md"
   ],
   "stacks": {
     "name": "cursio-academy",
@@ -38,5 +39,20 @@
       "routes/cursio.ts"
     ],
     "routePrefix": "/api/cursio"
+  },
+  "author": "Chris Breuer <chris@stacksjs.com>",
+  "homepage": "https://cursio.org",
+  "bugs": {
+    "url": "https://github.com/stacksjs/cursio/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@stacksjs/env": ">=0.75.0",
+    "@stacksjs/router": ">=0.75.0"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
   }
 }

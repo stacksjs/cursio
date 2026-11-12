@@ -1,5 +1,16 @@
 # Cursio Changelog
 
+[Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.2...v0.1.3)
+
+## ✨ Features
+
+- search an academy's series and episodes ([38e311e](https://github.com/stacksjs/cursio/commit/38e311e)) _(by Chris)_
+- a welcome email that speaks for the Cursio account ([1c0f9d2](https://github.com/stacksjs/cursio/commit/1c0f9d2)) _(by Chris)_
+
+## Contributors
+
+- _Chris_
+
 [Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.1...v0.1.2)
 
 ## ✨ Features

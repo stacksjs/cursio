@@ -16,6 +16,7 @@ export const actions = {
   'Actions/Learn/LibraryAction': '../../../app/Actions/Learn/LibraryAction.ts',
   'Actions/Learn/QuizShowAction': '../../../app/Actions/Learn/QuizShowAction.ts',
   'Actions/Learn/SavePositionAction': '../../../app/Actions/Learn/SavePositionAction.ts',
+  'Actions/Learn/SearchAction': '../../../app/Actions/Learn/SearchAction.ts',
   'Actions/Learn/StartAttemptAction': '../../../app/Actions/Learn/StartAttemptAction.ts',
   'Actions/Learn/SubmitAttemptAction': '../../../app/Actions/Learn/SubmitAttemptAction.ts',
   'Actions/Learn/SubmitWorkAction': '../../../app/Actions/Learn/SubmitWorkAction.ts',

@@ -20,18 +20,58 @@ const cards = entries.map(entry => ({
 }))
 const topics = [...new Set(entries.map(entry => entry.topic).filter(Boolean))]
 const libraryPath = school ? `${learnBase(api)}/${school.slug}/library` : ''
+const searchPath = school ? `${learnBase(api)}/${school.slug}/search` : ''
+const lessonWord = words.lesson
 </script>
 <script client>
 import { useAuth } from '~/storage/framework/defaults/functions/auth'
 import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
 
 const libraryUrl = {{ libraryPath }}
+const searchUrl = {{ searchPath }}
+const lessonWord = {{ lessonWord }}
 const home = {{ base }}
 
 const topic = state('')
 const watching = state([])
 // Points and badges, once the signed-in learner has earned any.
 const earned = state(null)
+
+// Search: what is typed stays in a plain variable; only the results redraw.
+let typed = ''
+const results = state([])
+const searched = state('')
+const searching = state(false)
+
+function setQuery(value) {
+  typed = value
+  if (value.trim() === '')
+    clearSearch()
+}
+
+function clearSearch() {
+  results.set([])
+  searched.set('')
+}
+
+async function search() {
+  const query = typed.trim()
+  if (query.length < 2 || !searchUrl) {
+    clearSearch()
+    return
+  }
+  searching.set(true)
+  try {
+    const answer = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } })
+    const data = answer.ok ? await answer.json() : { results: [] }
+    results.set(data.results.map(item => ({ ...item, href: `${home}${item.slug}${item.episode ? `?episode=${item.episode}` : ''}` })))
+  }
+  catch {
+    results.set([])
+  }
+  searched.set(query)
+  searching.set(false)
+}
 
 function pickTopic(value) {
   topic.set(topic() === value ? '' : value)
@@ -67,7 +107,7 @@ onMount(async () => {
     {{-- Badge icons arrive from the API as class names, so nothing else in a
       template names them. This empty element does, which is what makes the CSS
       scanner of any app that installs the package generate them. --}}
-    <span hidden class="i-hugeicons-footprints i-hugeicons-fire i-hugeicons-quiz-01 i-hugeicons-target-02 i-hugeicons-task-done-01 i-hugeicons-award-01 i-hugeicons-champion"></span>
+    <span hidden class="i-hugeicons-award-01 i-hugeicons-champion i-hugeicons-fire i-hugeicons-footprints i-hugeicons-quiz-01 i-hugeicons-target-02 i-hugeicons-task-done-01"></span>
     <ul class="flex flex-wrap gap-2">
       <li :for="badge in earned()?.badges || []" class="inline-flex gap-2 items-center px-3 h-9 text-ink text-sm bg-accent-soft rounded-full" :title="badge.earnedBy">
         <span class="size-4 text-accent" :class="badge.icon" aria-hidden="true"></span>{{ badge.title }}
@@ -94,6 +134,24 @@ onMount(async () => {
   @if(cards.length === 0)
     <p class="mt-10 text-muted">Nothing is published here yet.</p>
   @else
+    <form class="flex gap-2 mt-10 max-w-xl" role="search" @submit.prevent="search()">
+      <label for="cursio-search" class="sr-only">Search {{ words.courses }} and {{ words.lessons }}</label>
+      <input id="cursio-search" type="search" maxlength="80" placeholder="Search {{ words.courses }} and {{ words.lessons }}" class="flex-1 px-4 h-11 min-w-0 text-ink bg-surface border border-line rounded-xl" @input="setQuery($event.target.value)">
+      <button type="submit" class="inline-flex items-center px-5 h-11 font-medium text-ink whitespace-nowrap border border-line rounded-full disabled:opacity-60" :disabled="searching()">Search</button>
+    </form>
+    <section class="mt-4" :hidden="searched() === ''" hidden aria-live="polite" aria-label="Search results">
+      <p class="text-muted text-sm" :hidden="results().length > 0">Nothing matches "{{ searched() }}".</p>
+      <ul class="flex flex-col gap-2">
+        <li :for="item in results()">
+          <a :href="item.href" class="flex flex-wrap gap-x-3 gap-y-1 items-center px-4 py-3 bg-surface hover:bg-tint border border-line rounded-xl transition-colors">
+            <span class="font-medium text-ink">{{ item.title }}</span>
+            <span class="text-muted text-sm" :hidden="item.kind === 'course'">{{ item.courseTitle }}, {{ lessonWord }} {{ item.episode }}</span>
+            <span class="px-2 py-0.5 font-medium text-accent text-xs bg-accent-soft rounded-full" :hidden="!item.free">Free</span>
+          </a>
+        </li>
+      </ul>
+    </section>
+
     @if(topics.length > 1)
       <div class="flex flex-wrap gap-2 mt-10" role="group" aria-label="Topics">
         <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="topic() === '' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="topic() === ''" @click="topic.set('')">Everything</button>

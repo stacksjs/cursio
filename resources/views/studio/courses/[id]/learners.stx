@@ -177,7 +177,7 @@ onMount(load)
             <p class="text-muted text-sm truncate">{{ learner.email }}</p>
           </div>
           <div class="md:col-span-4">
-            <p class="text-ink text-sm"><span class="font-semibold tabular-nums">{{ learner.percent }}%</span>, {{ learner.completed }} of {{ learner.total }} lessons</p>
+            <p class="text-ink text-sm"><span class="font-semibold tabular-nums">{{ learner.percent }}%</span>, {{ learner.completed }} of {{ learner.total }} lessons, <span class="tabular-nums">{{ learner.points }}</span> points</p>
             <div class="overflow-hidden mt-2 h-1.5 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="learner.percent" :aria-label="'Progress of ' + learner.name">
               <div class="h-full bg-accent rounded-full" :style="`width: ${learner.percent}%`"></div>
             </div>

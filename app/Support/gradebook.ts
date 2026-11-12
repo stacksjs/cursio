@@ -6,6 +6,7 @@
 import type { CourseRow } from './courses'
 import type { QuizStanding } from './grading'
 import { db } from '@stacksjs/database'
+import { factsOf, pointsFor } from './achievements'
 import { outlineOf } from './courses'
 import { EnrollmentError } from './enrollment'
 import { standings, toCsv } from './grading'
@@ -48,6 +49,8 @@ export interface GradebookLearner {
   /** Keyed by the assignment Lesson's id. Work never handed in is left out. */
   assignments: Record<number, AssignmentStanding>
   certificate: string | null
+  /** Points earned across the whole Academy, not this Course alone. */
+  points: number
 }
 
 export interface Gradebook {
@@ -91,6 +94,8 @@ export async function gradebookOf(course: CourseRow): Promise<Gradebook> {
 
   const standing = standings(attempts.map(row => ({ quizId: row.quiz_id, enrollmentId: row.enrollment_id, status: row.status, percent: row.percent, passed: Boolean(row.passed) })))
 
+  const facts = await factsOf(course.academy_id, enrollments.map(row => row.user_id))
+
   const learners = enrollments.map((enrollment) => {
     const user = users.find(row => row.id === enrollment.user_id)
     const progress = courseProgress(outline.lessonIds, done.filter(row => row.enrollment_id === enrollment.id).map(row => row.lesson_id))
@@ -124,6 +129,7 @@ export async function gradebookOf(course: CourseRow): Promise<Gradebook> {
       quizzes: byLesson,
       assignments: work,
       certificate: certificate?.serial ?? null,
+      points: pointsFor(facts.get(enrollment.user_id) ?? { lessons: 0, courses: 0, quizzesPassed: 0, perfectQuizzes: 0, workPassed: 0 }),
     }
   })
 
@@ -135,7 +141,7 @@ export async function gradebookOf(course: CourseRow): Promise<Gradebook> {
  * per Assignment. Work waiting for a mark reads "Waiting", not a zero.
  */
 export function gradebookCsv(book: Gradebook): string {
-  const header = ['Name', 'Email', 'Status', 'Enrolled', 'Completed', 'Progress %', ...book.quizzes.map(quiz => `${quiz.title} (best %)`), ...book.assignments.map(assignment => `${assignment.title} (of ${assignment.maxPoints})`), 'Certificate']
+  const header = ['Name', 'Email', 'Status', 'Enrolled', 'Completed', 'Progress %', ...book.quizzes.map(quiz => `${quiz.title} (best %)`), ...book.assignments.map(assignment => `${assignment.title} (of ${assignment.maxPoints})`), 'Certificate', 'Points']
   const rows = book.learners.map(learner => [
     learner.name,
     learner.email,
@@ -152,6 +158,7 @@ export function gradebookCsv(book: Gradebook): string {
       return work ? (work.score ?? 'Waiting') : ''
     }),
     learner.certificate ?? '',
+    learner.points,
   ])
   return toCsv([header, ...rows])
 }

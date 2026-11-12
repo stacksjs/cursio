@@ -166,7 +166,7 @@ describe('the gradebook', () => {
   test('exports as csv, with a hostile name defused', async () => {
     const csv = gradebookCsv(await gradebookOf(course))
     const lines = csv.trim().split('\r\n')
-    expect(lines[0]).toBe('"Name","Email","Status","Enrolled","Completed","Progress %","Knot quiz (best %)","Certificate"')
+    expect(lines[0]).toBe('"Name","Email","Status","Enrolled","Completed","Progress %","Knot quiz (best %)","Certificate","Points"')
     expect(lines).toHaveLength(3)
     expect(csv).toContain('"\'=cmd|calc"')
     expect(csv).toContain('"Ada"')

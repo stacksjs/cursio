@@ -30,6 +30,8 @@ const home = {{ base }}
 
 const topic = state('')
 const watching = state([])
+// Points and badges, once the signed-in learner has earned any.
+const earned = state(null)
 
 function pickTopic(value) {
   topic.set(topic() === value ? '' : value)
@@ -40,6 +42,8 @@ onMount(async () => {
     return
   try {
     const data = await dashboardApi(libraryUrl)
+    if (data.achievements && data.achievements.points > 0)
+      earned.set(data.achievements)
     // What is unfinished comes first: that is what "continue" means.
     watching.set(data.library.filter(entry => !entry.completed).map(entry => ({ ...entry, href: `${home}${entry.slug}${entry.nextEpisode ? `?episode=${entry.nextEpisode}` : ''}` })))
   }
@@ -57,6 +61,20 @@ onMount(async () => {
       <p class="mt-3 max-w-[60ch] text-lg text-muted">{{ school.tagline }}</p>
     @endif
   @endif
+
+  <section class="flex flex-wrap gap-x-8 gap-y-4 items-center mt-10 p-5 bg-surface border border-line rounded-2xl" :hidden="earned() === null" hidden aria-label="What you have earned">
+    <p class="text-ink"><span class="font-semibold tabular-nums text-2xl tracking-tight">{{ earned()?.points || 0 }}</span> <span class="text-muted text-sm">points</span></p>
+    {{-- Badge icons arrive from the API as class names, so nothing else in a
+      template names them. This empty element does, which is what makes the CSS
+      scanner of any app that installs the package generate them. --}}
+    <span hidden class="i-hugeicons-footprints i-hugeicons-fire i-hugeicons-quiz-01 i-hugeicons-target-02 i-hugeicons-task-done-01 i-hugeicons-award-01 i-hugeicons-champion"></span>
+    <ul class="flex flex-wrap gap-2">
+      <li :for="badge in earned()?.badges || []" class="inline-flex gap-2 items-center px-3 h-9 text-ink text-sm bg-accent-soft rounded-full" :title="badge.earnedBy">
+        <span class="size-4 text-accent" :class="badge.icon" aria-hidden="true"></span>{{ badge.title }}
+      </li>
+    </ul>
+    <p class="text-muted text-sm" :hidden="!earned()?.next">Next: {{ earned()?.next?.title }}. {{ earned()?.next?.earnedBy }}.</p>
+  </section>
 
   <section class="mt-10" :hidden="watching().length === 0" hidden aria-labelledby="continue-heading">
     <h2 id="continue-heading" class="font-medium text-muted text-sm">Continue watching</h2>

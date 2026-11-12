@@ -28,6 +28,9 @@ const lessonKind = state('reading')
 const lessonBody = state('')
 const lessonVideo = state('')
 const lessonDays = state('')
+const lessonPreview = state(false)
+const lessonMinutes = state('')
+const courseTopic = state('')
 
 const lessonCount = derived(() => sections().reduce((total, section) => total + section.lessons.length, 0))
 const published = derived(() => course()?.status === 'published')
@@ -38,6 +41,7 @@ async function load() {
     course.set(data.course)
     sections.set(data.outline.sections)
     details.set(data.lessons)
+    courseTopic.set(data.course.topic || '')
     if (!lessonSection() && data.outline.sections.length > 0)
       lessonSection.set(String(data.outline.sections[0].id))
   }
@@ -77,6 +81,8 @@ function clearLessonForm() {
   lessonVideo.set('')
   lessonDays.set('')
   lessonKind.set('reading')
+  lessonPreview.set(false)
+  lessonMinutes.set('')
 }
 
 function editLesson(lessonId) {
@@ -90,6 +96,8 @@ function editLesson(lessonId) {
   lessonBody.set(lesson.body || '')
   lessonVideo.set(lesson.video_url || '')
   lessonDays.set(lesson.unlock_after_days ? String(lesson.unlock_after_days) : '')
+  lessonPreview.set(Boolean(lesson.is_preview))
+  lessonMinutes.set(lesson.duration_seconds ? String(Math.round(lesson.duration_seconds / 6) / 10) : '')
 }
 
 async function saveLesson() {
@@ -99,6 +107,8 @@ async function saveLesson() {
     body: lessonBody(),
     video_url: lessonVideo(),
     unlock_after_days: Number(lessonDays()) || 0,
+    is_preview: lessonPreview(),
+    duration_seconds: Math.round((Number(lessonMinutes()) || 0) * 60),
   }
   const saved = editingLesson()
     ? await send('PATCH', `/lessons/${editingLesson()}`, fields)
@@ -139,6 +149,14 @@ function remove(kind, rowId) {
   send('DELETE', `/${kind}s/${rowId}`)
 }
 
+function setLevel(value) {
+  send('PATCH', '', { level: course()?.level === value ? '' : value })
+}
+
+function saveTopic() {
+  send('PATCH', '', { topic: courseTopic() })
+}
+
 function setProgression(value) {
   send('PATCH', '', { progression: value })
 }
@@ -176,6 +194,24 @@ onMount(load)
       </div>
     </fieldset>
 
+    <div class="grid gap-6 grid-cols-1 md:grid-cols-2 mt-6">
+      <fieldset>
+        <legend class="font-medium text-ink text-sm">Level</legend>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="course()?.level === 'beginner' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="course()?.level === 'beginner'" @click="setLevel('beginner')">Beginner</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="course()?.level === 'intermediate' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="course()?.level === 'intermediate'" @click="setLevel('intermediate')">Intermediate</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="course()?.level === 'advanced' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="course()?.level === 'advanced'" @click="setLevel('advanced')">Advanced</button>
+        </div>
+      </fieldset>
+      <form class="flex gap-2 items-end" @submit.prevent="saveTopic()">
+        <div class="flex-1">
+          <label for="course-topic" class="block font-medium text-ink text-sm">Topic</label>
+          <input id="course-topic" x-model.trim="courseTopic" type="text" maxlength="40" class="mt-2 px-4 h-10 w-full text-ink bg-surface border border-line rounded-xl">
+        </div>
+        <button type="submit" class="inline-flex items-center px-4 h-10 text-ink text-sm border border-line rounded-full disabled:opacity-60" :disabled="busy()">Save</button>
+      </form>
+    </div>
+
     <div class="flex flex-col gap-4 mt-8">
       <section :for="section in sections()" class="p-5 bg-surface border border-line rounded-2xl">
         <div class="flex gap-2 items-center justify-between">
@@ -191,6 +227,7 @@ onMount(load)
           <li :for="lesson in section.lessons" class="flex gap-3 items-center pl-3 rounded-xl" :class="editingLesson() === lesson.id ? 'bg-tint' : ''">
             <span class="shrink-0 size-4 text-muted" :class="lesson.kind === 'video' ? 'i-hugeicons-play-circle' : (lesson.kind === 'quiz' ? 'i-hugeicons-quiz-01' : 'i-hugeicons-book-open-01')" aria-hidden="true"></span>
             <span class="flex-1 text-ink text-sm">{{ lesson.title }}</span>
+            <span class="px-2 py-0.5 font-medium text-accent text-xs bg-accent-soft rounded-full" :hidden="!lesson.is_preview">Free</span>
             <span class="text-muted text-xs" :hidden="!lesson.unlock_after_days">Opens after {{ lesson.unlock_after_days }} {{ lesson.unlock_after_days === 1 ? 'day' : 'days' }}</span>
             <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move lesson up" :disabled="busy()" @click="moveLesson(section.id, lesson.id, -1)"><span class="size-4 i-hugeicons-arrow-up-01" aria-hidden="true"></span></button>
             <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move lesson down" :disabled="busy()" @click="moveLesson(section.id, lesson.id, 1)"><span class="size-4 i-hugeicons-arrow-down-01" aria-hidden="true"></span></button>
@@ -242,6 +279,16 @@ onMount(load)
         <textarea id="lesson-body" x-model="lessonBody" rows="6" class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
       </div>
       <p class="mt-2 text-muted text-sm" :hidden="lessonKind() !== 'quiz' || editingLesson() !== 0" hidden>Add the lesson, then write its questions.</p>
+      <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 mt-4 max-w-xl" :hidden="lessonKind() === 'quiz'">
+        <div>
+          <label for="lesson-minutes" class="block font-medium text-ink text-sm">Length (minutes)</label>
+          <input id="lesson-minutes" x-model="lessonMinutes" type="number" min="0" step="0.1" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        </div>
+        <div>
+          <p class="font-medium text-ink text-sm">Who can watch</p>
+          <button type="button" class="inline-flex items-center mt-2 px-4 h-11 text-sm border rounded-full" :class="lessonPreview() ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="lessonPreview()" @click="lessonPreview.set(!lessonPreview())">{{ lessonPreview() ? 'Free preview for anyone' : 'Enrolled learners only' }}</button>
+        </div>
+      </div>
       <div class="mt-4 max-w-xs">
         <label for="lesson-days" class="block font-medium text-ink text-sm">Opens after (days)</label>
         <input id="lesson-days" x-model="lessonDays" type="number" min="0" max="3650" aria-describedby="lesson-days-help" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">

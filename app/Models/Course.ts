@@ -88,6 +88,20 @@ export default defineModel({
       factory: () => 'open',
     },
 
+    /** Who it is for. Unset: no level shown. */
+    level: {
+      order: 7,
+      fillable: true,
+      validation: { rule: schema.enum(['beginner', 'intermediate', 'advanced']) },
+    },
+
+    /** One word or two a catalog is browsed by: "Database", "Testing". */
+    topic: {
+      order: 8,
+      fillable: true,
+      validation: { rule: schema.string().max(40) },
+    },
+
     publishedAt: {
       order: 6,
       validation: { rule: schema.date() },

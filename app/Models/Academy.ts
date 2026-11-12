@@ -56,6 +56,19 @@ export default defineModel({
       factory: () => '',
     },
 
+    /**
+     * What this Academy calls its Courses and Lessons where Learners read
+     * them: courses and lessons, or series and episodes for a screencast site.
+     */
+    vocabulary: {
+      required: true,
+      default: 'course',
+      order: 5,
+      fillable: true,
+      validation: { rule: schema.enum(['course', 'series']) },
+      factory: () => 'course',
+    },
+
     status: {
       required: true,
       default: 'active',

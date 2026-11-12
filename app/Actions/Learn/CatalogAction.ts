@@ -1,7 +1,7 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
 import { academyBySlug } from '../../Support/academies'
-import { publishedCourses } from '../../Support/courses'
+import { catalogOf } from '../../Support/courses'
 
 export default new Action({
   name: 'AcademyCatalog',
@@ -13,10 +13,9 @@ export default new Action({
     if (!academy)
       return response.notFound('Academy not found')
 
-    const courses = await publishedCourses(academy.id)
     return response.json({
       academy: { name: academy.name, slug: academy.slug, tagline: academy.tagline },
-      courses: courses.map(course => ({ title: course.title, slug: course.slug, summary: course.summary })),
+      courses: await catalogOf(academy.id),
     })
   },
 })

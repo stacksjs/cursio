@@ -13,6 +13,7 @@ import { db } from '@stacksjs/database'
 import { isUniqueViolation } from '@stacksjs/orm'
 import { issueCertificate } from './certificates'
 import { outlineOf } from './courses'
+import { renderNotes } from './notes'
 import { courseProgress, lessonAccess } from './progress'
 
 export interface EnrollmentRow {
@@ -133,7 +134,10 @@ export async function completeLesson(userId: number, lessonId: number, at: Date 
   // Looked up first so that completing a Lesson twice, which is ordinary, does
   // not go through a failed insert and an error in the logs. The catch stays
   // for two requests racing past this check.
-  const already = await db.selectFrom('lesson_progress').select(['id']).where('enrollment_id', '=', enrollment.id).where('lesson_id', '=', lesson.id).executeTakeFirst()
+  const already = await db.selectFrom('lesson_progress').select(['id', 'completed_at']).where('enrollment_id', '=', enrollment.id).where('lesson_id', '=', lesson.id).executeTakeFirst() as { id: number, completed_at: string | null } | undefined
+  // A row may already be there holding only a resume position.
+  if (already && !already.completed_at)
+    await db.updateTable('lesson_progress').set({ completed_at: stamp, updated_at: stamp }).where('id', '=', already.id).execute()
   if (!already) {
     try {
       await db.insertInto('lesson_progress').values({ user_id: userId, enrollment_id: enrollment.id, lesson_id: lesson.id, completed_at: stamp }).execute()
@@ -167,6 +171,10 @@ export interface LessonContent {
   video_url: string | null
   duration_seconds: number
   completed: boolean
+  /** The notes as HTML: Markdown rendered, sanitized, code highlighted. */
+  body_html: string
+  /** Where the Learner stopped watching, to resume from. */
+  position_seconds: number
 }
 
 /**
@@ -174,7 +182,7 @@ export interface LessonContent {
  * it is read only through an Enrollment, never by Lesson id alone.
  */
 export async function lessonForLearner(userId: number, lessonId: number, at: Date = new Date()): Promise<LessonContent | null> {
-  const lesson = await db.selectFrom('lessons').select(['id', 'course_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds']).where('id', '=', lessonId).executeTakeFirst() as Omit<LessonContent, 'completed'> | undefined
+  const lesson = await db.selectFrom('lessons').select(['id', 'course_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds']).where('id', '=', lessonId).executeTakeFirst() as Omit<LessonContent, 'completed' | 'body_html' | 'position_seconds'> | undefined
   if (!lesson)
     return null
 
@@ -189,5 +197,104 @@ export async function lessonForLearner(userId: number, lessonId: number, at: Dat
   if (closed)
     throw new EnrollmentError(closedMessage(closed))
 
-  return { ...lesson, completed: progress.completedIds.includes(lesson.id) }
+  const row = await db.selectFrom('lesson_progress').select(['position_seconds']).where('enrollment_id', '=', enrollment.id).where('lesson_id', '=', lesson.id).executeTakeFirst() as { position_seconds: number } | undefined
+
+  return {
+    ...lesson,
+    completed: progress.completedIds.includes(lesson.id),
+    body_html: await renderNotes(lesson.body),
+    position_seconds: row?.position_seconds ?? 0,
+  }
+}
+
+/**
+ * A free preview, for anyone. Only a Lesson its author marked as a preview,
+ * in a published Course of a live Academy; everything else is "not found",
+ * the same answer a Lesson that does not exist gets.
+ */
+export async function previewLesson(lessonId: number): Promise<LessonContent | null> {
+  const lesson = await db.selectFrom('lessons').select(['id', 'course_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds', 'is_preview']).where('id', '=', lessonId).executeTakeFirst() as (Omit<LessonContent, 'completed' | 'body_html' | 'position_seconds'> & { is_preview: number | boolean }) | undefined
+  if (!lesson || !lesson.is_preview || lesson.kind === 'quiz')
+    return null
+
+  const course = await db.selectFrom('courses').select(['id']).where('id', '=', lesson.course_id).where('status', '=', 'published').where('deleted_at', 'is', null).executeTakeFirst()
+  if (!course)
+    return null
+
+  const { is_preview: _preview, ...content } = lesson
+  return { ...content, completed: false, body_html: await renderNotes(lesson.body), position_seconds: 0 }
+}
+
+/**
+ * Remember where a Learner stopped watching. Best effort by design: it is
+ * called every few seconds from the player, so it never throws for a Lesson
+ * the Learner cannot open; it just does nothing.
+ */
+export async function savePosition(userId: number, lessonId: number, seconds: number, at: Date = new Date()): Promise<boolean> {
+  const position = Math.max(0, Math.min(Math.round(Number(seconds) || 0), 24 * 60 * 60))
+  const lesson = await db.selectFrom('lessons').select(['id', 'course_id']).where('id', '=', lessonId).executeTakeFirst() as { id: number, course_id: number } | undefined
+  const enrollment = lesson ? await enrollmentOf(userId, lesson.course_id) : null
+  if (!lesson || !enrollment || enrollment.status === 'revoked')
+    return false
+  if ((await progressOf(enrollment, at)).locked[lesson.id])
+    return false
+
+  const stamp = at.toISOString()
+  const row = await db.selectFrom('lesson_progress').select(['id']).where('enrollment_id', '=', enrollment.id).where('lesson_id', '=', lesson.id).executeTakeFirst() as { id: number } | undefined
+  if (row) {
+    await db.updateTable('lesson_progress').set({ position_seconds: position, updated_at: stamp }).where('id', '=', row.id).execute()
+    return true
+  }
+
+  try {
+    await db.insertInto('lesson_progress').values({ user_id: userId, enrollment_id: enrollment.id, lesson_id: lesson.id, position_seconds: position }).execute()
+  }
+  catch (error) {
+    if (!isUniqueViolation(error))
+      throw error
+  }
+  return true
+}
+
+export interface LibraryEntry {
+  title: string
+  slug: string
+  percent: number
+  completed: boolean
+  /** The next Lesson to watch, by its place in the Course (1 is the first). */
+  nextEpisode: number | null
+  nextTitle: string | null
+}
+
+/** What a Learner is enrolled in at one Academy, most recently active first. */
+export async function libraryOf(userId: number, academyId: number, at: Date = new Date()): Promise<LibraryEntry[]> {
+  const courses = await db.selectFrom('courses').select(['id', 'title', 'slug']).where('academy_id', '=', academyId).where('status', '=', 'published').where('deleted_at', 'is', null).execute() as { id: number, title: string, slug: string }[]
+  if (courses.length === 0)
+    return []
+
+  const enrollments = await db.selectFrom('enrollments').select([...enrollmentColumns, 'updated_at']).where('user_id', '=', userId).where('course_id', 'in', courses.map(course => course.id)).execute() as (EnrollmentRow & { updated_at: string | null })[]
+
+  const entries: (LibraryEntry & { touched: string })[] = []
+  for (const enrollment of enrollments) {
+    if (enrollment.status === 'revoked')
+      continue
+    const course = courses.find(row => row.id === enrollment.course_id)
+    if (!course)
+      continue
+    const outline = await outlineOf(course.id)
+    const progress = await progressOf(enrollment, at)
+    const last = await db.selectFrom('lesson_progress').select(['updated_at', 'created_at']).where('enrollment_id', '=', enrollment.id).orderBy('id', 'desc').executeTakeFirst() as { updated_at: string | null, created_at: string } | undefined
+    const next = progress.nextLessonId
+    entries.push({
+      title: course.title,
+      slug: course.slug,
+      percent: progress.percent,
+      completed: progress.isComplete,
+      nextEpisode: next ? outline.lessonIds.indexOf(next) + 1 : null,
+      nextTitle: next ? outline.sections.flatMap(section => section.lessons).find(lesson => lesson.id === next)?.title ?? null : null,
+      touched: last?.updated_at ?? last?.created_at ?? enrollment.created_at,
+    })
+  }
+
+  return entries.sort((a, b) => b.touched.localeCompare(a.touched)).map(({ touched: _touched, ...entry }) => entry)
 }

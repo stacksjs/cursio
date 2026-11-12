@@ -18,7 +18,7 @@ export default new Action({
       return response.notFound('Course not found')
 
     try {
-      const next = await updateCourse(course, { title: sent(request, 'title'), summary: sent(request, 'summary'), progression: sent(request, 'progression') })
+      const next = await updateCourse(course, { title: sent(request, 'title'), summary: sent(request, 'summary'), progression: sent(request, 'progression'), level: sent(request, 'level'), topic: sent(request, 'topic') })
       return response.json({ success: true, course: next })
     }
     catch (error) {

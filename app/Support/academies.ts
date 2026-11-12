@@ -15,10 +15,11 @@ export interface AcademyRow {
   name: string
   slug: string
   tagline: string | null
+  vocabulary: 'course' | 'series'
   status: string
 }
 
-const columns = ['id', 'team_id', 'name', 'slug', 'tagline', 'status'] as const
+const columns = ['id', 'team_id', 'name', 'slug', 'tagline', 'vocabulary', 'status'] as const
 
 /** Subdomains an Academy may not take: they are, or will be, Cursio's own. */
 export const reservedSlugs = new Set([
@@ -59,7 +60,7 @@ export async function createAcademy(input: { ownerId: number, name: string, slug
     await tx.insertInto('sites').values({ team_id: team.id, name, subdomain: slug, status: 'active', uuid: crypto.randomUUID() }).execute()
     const academy = await tx.insertInto('academies').values({ team_id: team.id, name, slug, status: 'active', uuid: crypto.randomUUID() }).returning(['id']).executeTakeFirst() as { id: number }
 
-    return { id: academy.id, team_id: team.id, name, slug, tagline: null, status: 'active' }
+    return { id: academy.id, team_id: team.id, name, slug, tagline: null, vocabulary: 'course', status: 'active' }
   })
 }
 
@@ -96,4 +97,41 @@ export async function academyBySlug(slug: string): Promise<AcademyRow | null> {
  */
 export async function academyForSite(site: { subdomain?: string } | null | undefined): Promise<AcademyRow | null> {
   return site?.subdomain ? await academyBySlug(site.subdomain) : null
+}
+
+export interface Words {
+  course: string
+  courses: string
+  lesson: string
+  lessons: string
+}
+
+/**
+ * The words an Academy's Learners read. The domain keeps one language (Course,
+ * Lesson); this only changes the labels, so a screencast site can say series
+ * and episodes without anything underneath being different.
+ */
+export function wordsOf(academy: { vocabulary?: string } | null | undefined): Words {
+  return academy?.vocabulary === 'series'
+    ? { course: 'series', courses: 'series', lesson: 'episode', lessons: 'episodes' }
+    : { course: 'course', courses: 'courses', lesson: 'lesson', lessons: 'lessons' }
+}
+
+export async function updateAcademy(academy: AcademyRow, input: { name?: string, tagline?: string, vocabulary?: string }): Promise<AcademyRow> {
+  const next = { ...academy }
+  if (input.name !== undefined) {
+    if (input.name.trim().length < 2)
+      throw new AcademyError('An academy needs a name.')
+    next.name = input.name.trim()
+  }
+  if (input.tagline !== undefined)
+    next.tagline = input.tagline.trim().slice(0, 160) || null
+  if (input.vocabulary !== undefined) {
+    if (input.vocabulary !== 'course' && input.vocabulary !== 'series')
+      throw new AcademyError('An academy speaks of courses or of series.')
+    next.vocabulary = input.vocabulary
+  }
+
+  await db.updateTable('academies').set({ name: next.name, tagline: next.tagline, vocabulary: next.vocabulary, updated_at: new Date().toISOString() }).where('id', '=', academy.id).execute()
+  return next
 }

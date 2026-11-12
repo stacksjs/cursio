@@ -8,6 +8,7 @@ import { route } from '@stacksjs/router'
  */
 route.get('/', 'Actions/Studio/StudioOverviewAction')
 route.post('/academies', 'Actions/Studio/CreateAcademyAction')
+route.patch('/academy', 'Actions/Studio/UpdateAcademyAction')
 route.post('/courses', 'Actions/Studio/CreateCourseAction')
 route.get('/courses/{id}', 'Actions/Studio/CourseOutlineAction')
 route.post('/courses/{id}/sections', 'Actions/Studio/AddSectionAction')

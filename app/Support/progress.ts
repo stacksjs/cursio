@@ -22,6 +22,8 @@ export interface OutlineLesson {
   position: number
   /** Days after enrollment before the Lesson opens. Null: open from the start. */
   unlock_after_days?: number | null
+  /** Anyone may open it, enrolled or not. */
+  is_preview?: boolean
 }
 
 export interface Outline {

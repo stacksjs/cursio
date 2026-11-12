@@ -1,9 +1,42 @@
+<script server>
+import { wordsOf } from '~/app/Support/academies'
+import { runtime } from '~/app/Support/courses'
+
+// What a screencast page needs from the outline, worked out once: the order
+// Lessons are met in (an episode's number is its place in it), which may be
+// watched without enrolling, and a clock face for each.
+const words = wordsOf(school)
+const lessonOrder = outline.lessonIds
+const flat = outline.sections.flatMap(section => section.lessons)
+const previewIds = flat.filter(lesson => lesson.is_preview).map(lesson => lesson.id)
+const totalRuntime = runtime(flat.reduce((sum, lesson) => sum + lesson.duration_seconds, 0))
+const levelText = found?.level ? found.level.charAt(0).toUpperCase() + found.level.slice(1) : ''
+const rows = outline.sections.map(section => ({
+  title: section.title,
+  lessons: section.lessons.map(lesson => ({
+    id: lesson.id,
+    title: lesson.title,
+    number: lessonOrder.indexOf(lesson.id) + 1,
+    preview: Boolean(lesson.is_preview),
+    clock: lesson.duration_seconds > 0 ? `${Math.floor(lesson.duration_seconds / 60)}:${String(lesson.duration_seconds % 60).padStart(2, '0')}` : '',
+  })),
+}))
+</script>
 <script client>
 import { useAuth } from '~/storage/framework/defaults/functions/auth'
 import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
 
 const coursePath = {{ apiPath }}
 const total = {{ lessonTotal }}
+const order = {{ lessonOrder }}
+const previews = {{ previewIds }}
+const speeds = [1, 1.25, 1.5, 2]
+
+const speed = state(1)
+// The <video> element, handed over by its own `loadedmetadata` event.
+let player = null
+let playNext = false
+let savedAt = 0
 
 const signedIn = state(false)
 const enrolled = state(false)
@@ -84,8 +117,12 @@ async function enrollNow() {
   busy.set(false)
 }
 
+function canOpen(lessonId) {
+  return enrolled() ? !isLocked(lessonId) : previews.includes(lessonId)
+}
+
 async function open(lessonId) {
-  if (!enrolled() || isLocked(lessonId))
+  if (!canOpen(lessonId))
     return
   problem.set('')
   stopClock()
@@ -93,7 +130,16 @@ async function open(lessonId) {
   attempt.set(null)
   result.set(null)
   try {
-    const data = await dashboardApi(`/api/learn/lessons/${lessonId}`)
+    // Not enrolled: only a free preview got this far, and it has its own door.
+    const data = enrolled()
+      ? await dashboardApi(`/api/learn/lessons/${lessonId}`)
+      : await fetch(`/api/learn/lessons/${lessonId}/preview`, { headers: { Accept: 'application/json' } }).then(answer => answer.ok ? answer.json() : Promise.reject(new Error('This preview could not be opened.')))
+    try {
+      useSearchParams().set('episode', String(order.indexOf(lessonId) + 1))
+    }
+    catch {
+      // The address is a convenience; the episode opens either way.
+    }
     if (data.lesson.kind === 'quiz') {
       const sitting = await dashboardApi(`/api/learn/lessons/${lessonId}/quiz`)
       quiz.set(sitting.quiz)
@@ -116,10 +162,17 @@ async function complete() {
     const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/complete`, { method: 'POST', body: {} })
     take(data.progress)
     openLesson.set({ ...lesson, completed: true })
-    if (data.courseCompleted)
+    if (data.courseCompleted) {
       await load()
-    else if (data.progress.nextLessonId && !data.progress.locked[data.progress.nextLessonId])
-      await open(data.progress.nextLessonId)
+    }
+    else {
+      // Carry on to the one after this, as a viewer expects; only when there
+      // is none ahead go back to the first still unwatched.
+      const ahead = order.slice(order.indexOf(lesson.id) + 1).find(id => !data.progress.completedIds.includes(id) && !data.progress.locked[id])
+      const next = ahead || data.progress.nextLessonId
+      if (next && !data.progress.locked[next])
+        await open(next)
+    }
   }
   catch (error) {
     problem.set(error?.message || 'That did not save.')
@@ -280,7 +333,57 @@ function attemptsNote() {
   return sitting.attemptsLeft === 1 ? '1 attempt left' : `${sitting.attemptsLeft} attempts left`
 }
 
-onMount(load)
+/** The video is ready: put it back where the Learner stopped, at their speed. */
+function ready(video) {
+  player = video
+  video.playbackRate = speed()
+  const lesson = openLesson()
+  const from = lesson?.position_seconds || 0
+  if (from > 5 && (!video.duration || from < video.duration - 10))
+    video.currentTime = from
+  if (playNext) {
+    playNext = false
+    video.play().catch(() => {})
+  }
+}
+
+function setSpeed(value) {
+  speed.set(value)
+  if (player)
+    player.playbackRate = value
+}
+
+/** Remember the position every ten seconds of watching. */
+function watched(video) {
+  const lesson = openLesson()
+  if (!lesson || !enrolled() || Math.abs(video.currentTime - savedAt) < 10)
+    return
+  savedAt = video.currentTime
+  dashboardApi(`/api/learn/lessons/${lesson.id}/position`, { method: 'POST', body: { seconds: Math.round(video.currentTime) } }).catch(() => {})
+}
+
+/** The episode ran to its end: that completes it, and the next one starts. */
+async function ended() {
+  const lesson = openLesson()
+  if (!lesson || !enrolled())
+    return
+  playNext = true
+  if (lesson.completed) {
+    const next = order[order.indexOf(lesson.id) + 1]
+    if (next && canOpen(next))
+      await open(next)
+    return
+  }
+  await complete()
+}
+
+onMount(async () => {
+  await load()
+  const wanted = Number(useSearchParams().get('episode'))
+  const lessonId = Number.isInteger(wanted) && wanted > 0 ? order[wanted - 1] : 0
+  if (lessonId && canOpen(lessonId))
+    await open(lessonId)
+})
 </script>
 <template>
 <div data-stx-content>
@@ -290,6 +393,18 @@ onMount(load)
   @if(found.summary)
     <p class="mt-3 max-w-[60ch] text-lg text-muted">{{ found.summary }}</p>
   @endif
+  <p class="flex flex-wrap gap-x-4 gap-y-1 mt-4 text-muted text-sm">
+    @if(found.topic)
+      <span class="font-medium text-ink">{{ found.topic }}</span>
+    @endif
+    @if(levelText)
+      <span>{{ levelText }}</span>
+    @endif
+    <span>{{ lessonTotal }} {{ lessonTotal === 1 ? words.lesson : words.lessons }}</span>
+    @if(totalRuntime)
+      <span>{{ totalRuntime }}</span>
+    @endif
+  </p>
 
   <div class="flex flex-wrap gap-3 items-center mt-6" :hidden="enrolled()">
     <a href="/login?redirect={{ returnPath }}" class="inline-flex items-center px-6 h-12 font-medium text-accent-ink bg-accent rounded-full" :hidden="signedIn()">Sign in to enroll</a>
@@ -309,7 +424,7 @@ onMount(load)
 
   <div class="grid gap-8 grid-cols-1 lg:grid-cols-12 mt-10">
     <div class="flex flex-col gap-6 lg:col-span-5">
-      @foreach(outline.sections as section)
+      @foreach(rows as section)
         <div>
           <h2 class="font-medium text-muted text-sm">{{ section.title }}</h2>
           <ul class="flex flex-col gap-1 mt-2">
@@ -317,8 +432,13 @@ onMount(load)
               <li>
                 <button type="button" class="flex gap-3 items-center px-3 py-2.5 w-full text-left hover:bg-tint rounded-xl transition-colors" :class="openLesson()?.id === {{ lesson.id }} ? 'bg-tint' : ''" @click="open({{ lesson.id }})">
                   <span class="shrink-0 size-5" :class="isDone({{ lesson.id }}) ? 'i-hugeicons-checkmark-circle-02 text-accent' : (isLocked({{ lesson.id }}) ? 'i-hugeicons-square-lock-02 text-muted' : 'i-hugeicons-circle text-muted')" aria-hidden="true"></span>
+                  <span class="w-5 tabular-nums text-muted text-xs">{{ lesson.number }}</span>
                   <span class="flex-1 text-sm" :class="isLocked({{ lesson.id }}) ? 'text-muted' : 'text-ink'">{{ lesson.title }}</span>
+                  @if(lesson.preview)
+                    <span class="px-2 py-0.5 font-medium text-accent text-xs bg-accent-soft rounded-full" :hidden="enrolled()">Free</span>
+                  @endif
                   <span class="text-muted text-xs" x-text="lockNote({{ lesson.id }})"></span>
+                  <span class="tabular-nums text-muted text-xs">{{ lesson.clock }}</span>
                 </button>
               </li>
             @endforeach
@@ -328,12 +448,17 @@ onMount(load)
     </div>
 
     <div class="lg:col-span-7">
-      <p class="p-6 text-muted bg-tint rounded-2xl" :hidden="openLesson() !== null">{{ enrolled() ? 'Pick a lesson to begin.' : 'Enroll to open the lessons.' }}</p>
+      <p class="p-6 text-muted bg-tint rounded-2xl" :hidden="openLesson() !== null">{{ enrolled() ? 'Pick one to begin.' : (previews.length > 0 ? 'Watch a free one, or enroll to open them all.' : 'Enroll to open them.') }}</p>
       <article class="p-6 bg-surface border border-line rounded-2xl" :hidden="openLesson() === null" hidden>
         <h2 class="font-semibold text-2xl text-ink tracking-tight">{{ openLesson()?.title }}</h2>
-        <video class="mt-4 w-full rounded-xl" controls :hidden="!openLesson()?.video_url" hidden :src="openLesson()?.video_url || ''"></video>
-        <p class="mt-4 leading-relaxed text-ink whitespace-pre-line">{{ openLesson()?.body || '' }}</p>
-        <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="openLesson()?.kind === 'quiz'" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
+        <video class="aspect-video mt-4 w-full bg-black rounded-xl" controls playsinline preload="metadata" :hidden="!openLesson()?.video_url" hidden :src="openLesson()?.video_url || ''" @loadedmetadata="ready($event.target)" @timeupdate="watched($event.target)" @ended="ended()"></video>
+        <div class="flex flex-wrap gap-2 items-center mt-3" :hidden="!openLesson()?.video_url" hidden role="group" aria-label="Playback speed">
+          <span class="text-muted text-xs">Speed</span>
+          <button :for="value in speeds" type="button" class="inline-flex items-center px-3 h-9 tabular-nums text-xs border rounded-full" :class="speed() === value ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="speed() === value" @click="setSpeed(value)">{{ value }}x</button>
+        </div>
+        <div class="mt-4 notes" x-html="openLesson()?.body_html || ''"></div>
+        <p class="mt-6 p-4 text-ink text-sm bg-accent-soft rounded-xl" :hidden="enrolled() || openLesson() === null">This one is free. Enroll to watch the rest and keep your place.</p>
+        <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="openLesson()?.kind === 'quiz' || !enrolled()" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
 
         <div :hidden="quiz() === null" hidden>
           <div :hidden="attempt() !== null">

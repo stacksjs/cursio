@@ -84,6 +84,19 @@ export default defineModel({
       validation: { rule: schema.number().min(0).max(3650) },
     },
 
+    /**
+     * A free preview: anyone may open it, enrolled or not. It is how a series
+     * is sampled before signing up. A quiz is never a preview.
+     */
+    isPreview: {
+      required: true,
+      default: false,
+      order: 8,
+      fillable: true,
+      validation: { rule: schema.boolean() },
+      factory: () => false,
+    },
+
     /** Where it sits in its Section. */
     position: {
       required: true,

@@ -14,6 +14,7 @@ declare module '@stacksjs/database' {
       name: string
       slug: string
       tagline: string
+      vocabulary: "course" | "series"
       status: "active" | "suspended"
       team_id: number
     }
@@ -580,6 +581,8 @@ declare module '@stacksjs/database' {
       summary: string
       status: "draft" | "published" | "archived"
       progression: "open" | "linear"
+      level: "beginner" | "intermediate" | "advanced"
+      topic: string
       published_at: string
       team_id: number
       academy_id: number
@@ -935,6 +938,7 @@ declare module '@stacksjs/database' {
       created_at: string
       updated_at: string | null
       completed_at: string
+      position_seconds: number
       user_id: number
       enrollment_id: number
       lesson_id: number
@@ -951,6 +955,7 @@ declare module '@stacksjs/database' {
       video_url: string
       duration_seconds: number
       unlock_after_days: number
+      is_preview: number
       position: number
       team_id: number
       course_id: number

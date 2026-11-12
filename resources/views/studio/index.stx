@@ -52,6 +52,19 @@ async function openAcademy() {
   busy.set(false)
 }
 
+async function setVocabulary(value) {
+  busy.set(true)
+  problem.set('')
+  try {
+    const data = await dashboardApi('/api/studio/academy', { method: 'PATCH', body: { vocabulary: value, academy_id: academy().id } })
+    academy.set(data.academy)
+  }
+  catch (error) {
+    problem.set(error?.message || 'That did not save.')
+  }
+  busy.set(false)
+}
+
 async function createCourse() {
   busy.set(true)
   problem.set('')
@@ -101,6 +114,14 @@ onMount(load)
 
   <div :hidden="academy() === null" hidden>
     <p class="mt-2 text-muted">{{ academy()?.name }} <span class="font-mono text-sm">/a/{{ academy()?.slug }}</span></p>
+
+    <fieldset class="mt-6">
+      <legend class="font-medium text-ink text-sm">What learners see them called</legend>
+      <div class="flex flex-wrap gap-2 mt-2">
+        <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="academy()?.vocabulary !== 'series' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="academy()?.vocabulary !== 'series'" :disabled="busy()" @click="setVocabulary('course')">Courses and lessons</button>
+        <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="academy()?.vocabulary === 'series' ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="academy()?.vocabulary === 'series'" :disabled="busy()" @click="setVocabulary('series')">Series and episodes</button>
+      </div>
+    </fieldset>
 
     <form class="flex flex-col gap-3 sm:flex-row sm:items-end mt-8" @submit.prevent="createCourse()">
       <div class="flex-1">

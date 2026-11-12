@@ -27,6 +27,7 @@ export default new Action({
         videoUrl: sent(request, 'video_url'),
         durationSeconds: duration === undefined ? undefined : Number(duration),
         unlockAfterDays: days === undefined ? undefined : Number(days),
+        isPreview: request.get('is_preview') === undefined || request.get('is_preview') === null ? undefined : request.get('is_preview') === true,
       })
       return response.json({ success: true, lesson })
     }

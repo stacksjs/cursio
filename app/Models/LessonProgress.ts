@@ -4,8 +4,8 @@ import { schema } from '@stacksjs/validation'
 /**
  * Progress on one Lesson by one Learner.
  *
- * A row exists once the Learner has completed the Lesson (later: opened it,
- * with a resume position). One per Enrollment per Lesson, enforced by the
+ * A row exists once the Learner has started watching the Lesson (it then
+ * holds the resume position) or completed it (`completedAt` is set). One per Enrollment per Lesson, enforced by the
  * index, so completing twice changes nothing.
  */
 export default defineModel({
@@ -33,6 +33,15 @@ export default defineModel({
     completedAt: {
       order: 1,
       validation: { rule: schema.date() },
+    },
+
+    /** Where the Learner stopped watching, in seconds, to resume from. */
+    positionSeconds: {
+      required: true,
+      default: 0,
+      order: 2,
+      validation: { rule: schema.number().min(0) },
+      factory: () => 0,
     },
   },
 } as const)

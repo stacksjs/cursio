@@ -21,10 +21,14 @@ export interface CourseRow {
   summary: string | null
   status: string
   progression: 'open' | 'linear'
+  level: 'beginner' | 'intermediate' | 'advanced' | null
+  topic: string | null
   published_at: string | null
 }
 
-const courseColumns = ['id', 'team_id', 'academy_id', 'title', 'slug', 'summary', 'status', 'progression', 'published_at'] as const
+export const courseLevels = ['beginner', 'intermediate', 'advanced'] as const
+
+const courseColumns = ['id', 'team_id', 'academy_id', 'title', 'slug', 'summary', 'status', 'progression', 'level', 'topic', 'published_at'] as const
 
 export class CourseError extends Error {}
 
@@ -51,7 +55,7 @@ export async function createCourse(academy: AcademyRow, input: { title: string, 
     uuid: crypto.randomUUID(),
   }).returning(['id']).executeTakeFirst() as { id: number }
 
-  return { id: row.id, team_id: academy.team_id, academy_id: academy.id, title, slug, summary, status: 'draft', progression: 'open', published_at: null }
+  return { id: row.id, team_id: academy.team_id, academy_id: academy.id, title, slug, summary, status: 'draft', progression: 'open', level: null, topic: null, published_at: null }
 }
 
 /** `intro`, then `intro-2`, `intro-3`: unique inside the Academy. */
@@ -94,7 +98,7 @@ export async function addSection(course: CourseRow, input: { title: string }): P
 export const lessonKinds = ['video', 'reading', 'quiz'] as const
 export type LessonKind = typeof lessonKinds[number]
 
-export async function addLesson(course: CourseRow, input: { sectionId: number, title: string, kind?: string, body?: string, videoUrl?: string, durationSeconds?: number, unlockAfterDays?: number | null }): Promise<OutlineLesson> {
+export async function addLesson(course: CourseRow, input: { sectionId: number, title: string, kind?: string, body?: string, videoUrl?: string, durationSeconds?: number, unlockAfterDays?: number | null, isPreview?: boolean }): Promise<OutlineLesson> {
   const title = input.title.trim()
   if (!title)
     throw new CourseError('A lesson needs a title.')
@@ -127,6 +131,7 @@ export async function addLesson(course: CourseRow, input: { sectionId: number, t
     video_url: videoUrl,
     duration_seconds: durationSeconds,
     unlock_after_days: unlockDays(input.unlockAfterDays),
+    is_preview: kind !== 'quiz' && Boolean(input.isPreview),
     position,
     uuid: crypto.randomUUID(),
   }).returning(['id']).executeTakeFirst() as { id: number }
@@ -136,15 +141,15 @@ export async function addLesson(course: CourseRow, input: { sectionId: number, t
   if (kind === 'quiz')
     await db.insertInto('quizzes').values({ team_id: course.team_id, course_id: course.id, lesson_id: row.id, uuid: crypto.randomUUID() }).execute()
 
-  return { id: row.id, course_section_id: input.sectionId, title, kind, duration_seconds: durationSeconds, position, unlock_after_days: unlockDays(input.unlockAfterDays) }
+  return { id: row.id, course_section_id: input.sectionId, title, kind, duration_seconds: durationSeconds, position, unlock_after_days: unlockDays(input.unlockAfterDays), is_preview: kind !== 'quiz' && Boolean(input.isPreview) }
 }
 
 /** The Course's Sections and Lessons in teaching order. */
 export async function outlineOf(courseId: number): Promise<Outline> {
   const sections = await db.selectFrom('course_sections').select(['id', 'title', 'position']).where('course_id', '=', courseId).execute() as OutlineSection[]
-  const lessons = await db.selectFrom('lessons').select(['id', 'course_section_id', 'title', 'kind', 'duration_seconds', 'position', 'unlock_after_days']).where('course_id', '=', courseId).execute() as OutlineLesson[]
+  const lessons = await db.selectFrom('lessons').select(['id', 'course_section_id', 'title', 'kind', 'duration_seconds', 'position', 'unlock_after_days', 'is_preview']).where('course_id', '=', courseId).execute() as unknown as OutlineLesson[]
 
-  return buildOutline(sections, lessons)
+  return buildOutline(sections, lessons.map(lesson => ({ ...lesson, is_preview: Boolean(lesson.is_preview) })))
 }
 
 /**
@@ -196,7 +201,7 @@ function unlockDays(value: unknown): number | null {
   return Number.isFinite(days) && days > 0 && days <= 3650 ? days : null
 }
 
-export async function updateCourse(course: CourseRow, input: { title?: string, summary?: string, progression?: string }): Promise<CourseRow> {
+export async function updateCourse(course: CourseRow, input: { title?: string, summary?: string, progression?: string, level?: string, topic?: string }): Promise<CourseRow> {
   const next = { ...course }
 
   if (input.title !== undefined) {
@@ -213,8 +218,17 @@ export async function updateCourse(course: CourseRow, input: { title?: string, s
     next.progression = input.progression
   }
 
+  if (input.level !== undefined) {
+    if (input.level !== '' && !courseLevels.includes(input.level as typeof courseLevels[number]))
+      throw new CourseError('The level is beginner, intermediate or advanced.')
+    next.level = (input.level || null) as CourseRow['level']
+  }
+  if (input.topic !== undefined)
+    // A topic is a label and a filter key: plain words only.
+    next.topic = input.topic.replace(/[^\p{L}\p{N} .+#&-]/gu, '').trim().slice(0, 40) || null
+
   // The slug does not follow the title: a published link must keep working.
-  await db.updateTable('courses').set({ title: next.title, summary: next.summary, progression: next.progression, updated_at: now() }).where('id', '=', course.id).execute()
+  await db.updateTable('courses').set({ title: next.title, summary: next.summary, progression: next.progression, level: next.level, topic: next.topic, updated_at: now() }).where('id', '=', course.id).execute()
   return next
 }
 
@@ -225,7 +239,8 @@ export interface StudioLesson extends OutlineLesson {
 
 /** Everything about a Course's Lessons, for the people who edit them. */
 export async function lessonsForStudio(courseId: number): Promise<StudioLesson[]> {
-  return await db.selectFrom('lessons').select(['id', 'course_section_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds', 'position', 'unlock_after_days']).where('course_id', '=', courseId).execute() as StudioLesson[]
+  const rows = await db.selectFrom('lessons').select(['id', 'course_section_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds', 'position', 'unlock_after_days', 'is_preview']).where('course_id', '=', courseId).execute() as unknown as StudioLesson[]
+  return rows.map(row => ({ ...row, is_preview: Boolean(row.is_preview) }))
 }
 
 async function sectionOf(course: CourseRow, sectionId: number): Promise<{ id: number }> {
@@ -236,10 +251,10 @@ async function sectionOf(course: CourseRow, sectionId: number): Promise<{ id: nu
 }
 
 async function lessonOf(course: CourseRow, lessonId: number): Promise<StudioLesson> {
-  const lesson = await db.selectFrom('lessons').select(['id', 'course_section_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds', 'position', 'unlock_after_days']).where('id', '=', lessonId).where('course_id', '=', course.id).executeTakeFirst() as StudioLesson | undefined
+  const lesson = await db.selectFrom('lessons').select(['id', 'course_section_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds', 'position', 'unlock_after_days', 'is_preview']).where('id', '=', lessonId).where('course_id', '=', course.id).executeTakeFirst() as unknown as StudioLesson | undefined
   if (!lesson)
     throw new CourseError('That lesson is not part of this course.')
-  return lesson
+  return { ...lesson, is_preview: Boolean(lesson.is_preview) }
 }
 
 export async function renameSection(course: CourseRow, sectionId: number, title: string): Promise<void> {
@@ -249,7 +264,7 @@ export async function renameSection(course: CourseRow, sectionId: number, title:
   await db.updateTable('course_sections').set({ title: title.trim(), updated_at: now() }).where('id', '=', sectionId).execute()
 }
 
-export async function updateLesson(course: CourseRow, lessonId: number, input: { title?: string, kind?: string, body?: string, videoUrl?: string, durationSeconds?: number, unlockAfterDays?: number | null }): Promise<StudioLesson> {
+export async function updateLesson(course: CourseRow, lessonId: number, input: { title?: string, kind?: string, body?: string, videoUrl?: string, durationSeconds?: number, unlockAfterDays?: number | null, isPreview?: boolean }): Promise<StudioLesson> {
   const lesson = await lessonOf(course, lessonId)
   const title = input.title !== undefined ? input.title.trim() : lesson.title
   const kind = (input.kind ?? lesson.kind) as LessonKind
@@ -276,6 +291,7 @@ export async function updateLesson(course: CourseRow, lessonId: number, input: {
     video_url: videoUrl,
     duration_seconds: input.durationSeconds !== undefined ? Math.max(0, Math.round(Number(input.durationSeconds) || 0)) : lesson.duration_seconds,
     unlock_after_days: input.unlockAfterDays !== undefined ? unlockDays(input.unlockAfterDays) : (lesson.unlock_after_days ?? null),
+    is_preview: kind !== 'quiz' && Boolean(input.isPreview !== undefined ? input.isPreview : lesson.is_preview),
   }
 
   await db.updateTable('lessons').set({
@@ -285,6 +301,7 @@ export async function updateLesson(course: CourseRow, lessonId: number, input: {
     video_url: next.video_url,
     duration_seconds: next.duration_seconds,
     unlock_after_days: next.unlock_after_days,
+    is_preview: next.is_preview,
     updated_at: now(),
   }).where('id', '=', lessonId).execute()
 
@@ -357,4 +374,48 @@ export async function reorderLessons(course: CourseRow, sectionId: number, ids: 
 
   for (const [position, id] of ids.entries())
     await db.updateTable('lessons').set({ position }).where('id', '=', id).execute()
+}
+
+export interface CatalogEntry {
+  title: string
+  slug: string
+  summary: string | null
+  level: CourseRow['level']
+  topic: string | null
+  lessons: number
+  /** Total running time of its Lessons, in seconds. */
+  seconds: number
+  /** It has at least one Lesson anyone may open. */
+  hasPreview: boolean
+}
+
+/** The published Courses of an Academy with what a catalog card shows. */
+export async function catalogOf(academyId: number): Promise<CatalogEntry[]> {
+  const courses = await publishedCourses(academyId)
+  if (courses.length === 0)
+    return []
+
+  const lessons = await db.selectFrom('lessons').select(['course_id', 'duration_seconds', 'is_preview']).where('course_id', 'in', courses.map(course => course.id)).execute() as { course_id: number, duration_seconds: number, is_preview: number | boolean }[]
+
+  return courses.map((course) => {
+    const own = lessons.filter(lesson => lesson.course_id === course.id)
+    return {
+      title: course.title,
+      slug: course.slug,
+      summary: course.summary,
+      level: course.level,
+      topic: course.topic,
+      lessons: own.length,
+      seconds: own.reduce((sum, lesson) => sum + lesson.duration_seconds, 0),
+      hasPreview: own.some(lesson => Boolean(lesson.is_preview)),
+    }
+  })
+}
+
+/** `1h 24m`, `12m`, or nothing for a series with no running time yet. */
+export function runtime(seconds: number): string {
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 1)
+    return ''
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`
 }

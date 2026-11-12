@@ -14013,6 +14013,19 @@
             "isUnique": true,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "vocabulary",
+            "type": "enum",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": "course",
+            "enumValues": [
+              "course",
+              "series"
+            ]
           }
         ],
         "indexes": [
@@ -14162,6 +14175,28 @@
               "open",
               "linear"
             ]
+          },
+          {
+            "name": "level",
+            "type": "enum",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "enumValues": [
+              "beginner",
+              "intermediate",
+              "advanced"
+            ]
+          },
+          {
+            "name": "topic",
+            "type": "string",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "maxLength": 40
           }
         ],
         "indexes": [
@@ -14510,6 +14545,15 @@
             "isUnique": false,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "is_preview",
+            "type": "boolean",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": false
           }
         ],
         "indexes": [
@@ -14596,6 +14640,15 @@
             "isUnique": false,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "position_seconds",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": 0
           }
         ],
         "indexes": [
@@ -15344,7 +15397,7 @@
       }
     ]
   },
-  "hash": "82c6f7348ed812f1b3de0e9f688671ad077140ad04b3a95d811a03b7b33ef1bb",
+  "hash": "096970a479ef595620cadb05ac1ec22f12869af5251d095b37ca6f67df41f4fd",
   "dialect": "sqlite",
-  "updatedAt": "2026-11-12T03:45:55.790Z"
+  "updatedAt": "2026-11-12T06:06:10.770Z"
 }

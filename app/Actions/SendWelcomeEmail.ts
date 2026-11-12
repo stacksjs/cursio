@@ -1,63 +1,29 @@
 import { Action } from '@stacksjs/actions/runtime'
-import { mail, template } from '@stacksjs/email'
-import { log } from '@stacksjs/logging'
-import { schema } from '@stacksjs/validation/runtime'
+import { mail } from '@stacksjs/email'
+import { env } from '@stacksjs/env'
+import { site } from '../../resources/data/site'
+import { welcomeMessage } from '../Support/welcome'
+
+export interface WelcomeEmailParams {
+  to: string
+  name?: string
+}
 
 /**
- * Dispatched to, not requested.
+ * Cursio's own welcome email, in place of the framework's. Run by the event
+ * system on `user:registered` (see app/Events.ts), not by a request.
  *
- * `app/Events.ts` maps `'user:registered'` onto this action, and the event
- * system calls `handle(payload, event)` with the payload alone. This used to
- * read `request.get('to')`, which threw `request.get is not a function` the
- * first time anybody registered - and the types said nothing, because
- * `handle`'s parameter was typed as a request that never arrives.
- *
- * The payload is the one `RegisterAction` dispatches: `{ id, email, name, to }`.
- * Only what this action reads is declared.
+ * A learner may have signed up on an academy's own site, so the email speaks
+ * for the account, which is Cursio's, and does not name an academy it cannot
+ * know.
  */
-export default new Action({
+export default new Action<string, undefined, '', WelcomeEmailParams>({
   name: 'SendWelcomeEmail',
-  description: 'Sends a welcome email to newly registered users',
-  invocation: 'event',
+  description: 'Sends the Cursio welcome email to a newly registered account',
 
-  /*
-   * `to` is an address, and `name` carries the User model's own length bounds -
-   * the payload is built from a User row, so the two should not disagree about
-   * what a name is.
-   *
-   * `to` is `.required()` and `name` is not, which is what `RegisterAction`
-   * actually dispatches: the address always resolves (it falls back to the one
-   * being registered) while `name` reads `user?.name` and can be absent. So
-   * `user.name` types as `string | undefined`, and the `|| 'there'` below stops
-   * being defensive habit and starts being the thing the type asks for.
-   */
-  validations: {
-    to: { rule: schema.string().email().required() },
-    name: { rule: schema.string().min(5).max(100) },
-  },
-
-  async handle(user) {
-    const name = user.name || 'there'
-
-    log.debug(`[action] Sending welcome email to ${user.to}`)
-
-    const { html, text } = await template('welcome', {
-      subject: 'Welcome!',
-      variables: { name, email: user.to },
-    })
-
-    await mail.send({
-      to: user.to,
-      subject: 'Welcome to Stacks!',
-      html,
-      text,
-    })
-
-    log.info(`[action] Welcome email sent to ${user.to}`)
-
-    return {
-      success: true,
-      message: `Welcome email sent to ${user.to}`,
-    }
+  async handle({ to, name }: WelcomeEmailParams) {
+    const message = welcomeMessage({ product: site.name, name, url: env.APP_URL })
+    await mail.sendOrFail({ to, subject: message.subject, text: message.text })
+    return { success: true, message: `Welcome email sent to ${to}` }
   },
 })

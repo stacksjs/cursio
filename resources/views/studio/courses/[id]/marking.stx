@@ -9,6 +9,7 @@ import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-a
 
 const courseHome = `/studio/courses/{{ courseId }}`
 const base = `/api/studio/courses/{{ courseId }}/submissions`
+const essayBase = `/api/studio/courses/{{ courseId }}/essays`
 
 const loading = state(true)
 const loaded = state(false)
@@ -43,7 +44,28 @@ function statusText(entry) {
 async function load() {
   try {
     const data = await dashboardApi(base)
-    submissions.set(data.submissions)
+    // An essay answer reads and marks like handed-in work with one score.
+    // Negative ids keep the two kinds apart in one list.
+    const essays = (data.essays || []).map(essay => ({
+      id: -essay.answerId,
+      answerId: essay.answerId,
+      essay: true,
+      learnerName: essay.learner.name,
+      learnerEmail: essay.learner.email,
+      lessonTitle: essay.lessonTitle,
+      prompt: essay.prompt,
+      body: essay.response,
+      link: null,
+      status: 'submitted',
+      submitted_at: essay.submittedAt,
+      rubric: [],
+      rubric_scores: [],
+      maxPoints: essay.max,
+      passPoints: null,
+      score: null,
+      feedback: '',
+    }))
+    submissions.set([...essays, ...data.submissions])
     loaded.set(true)
   }
   catch (error) {
@@ -84,7 +106,10 @@ async function mark() {
     const body = entry.rubric.length > 0
       ? { scores: scores.map(value => value === '' ? Number.NaN : Number(value)), feedback }
       : { score: overall === '' ? '' : Number(overall), feedback }
-    await dashboardApi(`${base}/${entry.id}/mark`, { method: 'POST', body })
+    if (entry.essay)
+      await dashboardApi(`${essayBase}/${entry.answerId}/mark`, { method: 'POST', body: { points: overall === '' ? '' : Number(overall), feedback } })
+    else
+      await dashboardApi(`${base}/${entry.id}/mark`, { method: 'POST', body })
     openId.set(0)
     await load()
   }
@@ -100,20 +125,20 @@ onMount(load)
 <div data-stx-content>
   <a :href="courseHome" class="text-muted text-sm hover:text-ink">Back to the course</a>
 
-  <p class="mt-6 text-muted" :hidden="!loading()">Loading handed-in work.</p>
+  <p class="mt-6 text-muted" :hidden="!loading()">Loading the work to mark.</p>
 
   <div :hidden="!loaded()" hidden>
     <h1 class="mt-4 font-semibold text-3xl text-ink tracking-tight">Marking</h1>
     <p class="mt-1 text-muted text-sm">{{ waiting() }} waiting, {{ submissions().length }} handed in</p>
 
-    <p class="mt-8 p-6 text-muted bg-tint rounded-2xl" :hidden="submissions().length > 0">Nothing has been handed in yet.</p>
+    <p class="mt-8 p-6 text-muted bg-tint rounded-2xl" :hidden="submissions().length > 0">Nothing is waiting to be marked yet.</p>
 
     <div class="grid gap-8 grid-cols-1 lg:grid-cols-12 mt-8">
       <ul class="flex flex-col gap-2 lg:col-span-5">
         <li :for="entry in submissions()">
           <button type="button" class="flex flex-col gap-1 p-4 w-full text-left border rounded-2xl transition-colors" :class="openId() === entry.id ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-tint'" @click="pick(entry)">
             <span class="font-medium text-ink">{{ entry.learnerName }}</span>
-            <span class="text-muted text-sm">{{ entry.lessonTitle }}</span>
+            <span class="text-muted text-sm">{{ entry.lessonTitle }}{{ entry.essay ? ', essay answer' : '' }}</span>
             <span class="text-xs" :class="entry.status === 'submitted' ? 'font-medium text-accent' : 'text-muted'">{{ statusText(entry) }}</span>
           </button>
         </li>
@@ -125,6 +150,7 @@ onMount(load)
           <h2 class="font-semibold text-ink text-xl tracking-tight">{{ open()?.learnerName }}</h2>
           <p class="text-muted text-sm">{{ open()?.lessonTitle }}, {{ open()?.learnerEmail }}</p>
 
+          <p class="mt-5 max-w-[70ch] font-medium text-ink" :hidden="!open()?.prompt">{{ open()?.prompt || '' }}</p>
           <p class="mt-5 max-w-[70ch] leading-relaxed text-ink whitespace-pre-line" :hidden="!open()?.body">{{ open()?.body || '' }}</p>
           <p class="mt-4 text-sm" :hidden="!open()?.link">
             <a :href="open()?.link || '#'" target="_blank" rel="noopener noreferrer nofollow" class="break-all text-accent underline underline-offset-4">{{ open()?.link || '' }}</a>
@@ -143,7 +169,7 @@ onMount(load)
             <div class="max-w-xs" :hidden="(open()?.rubric.length || 0) > 0">
               <label for="mark-score" class="block font-medium text-ink text-sm">Score</label>
               <input id="mark-score" type="number" min="0" :max="open()?.maxPoints" class="mt-2 px-4 h-11 w-full tabular-nums text-ink bg-page border border-line rounded-xl" aria-describedby="mark-score-help" :value="open()?.score ?? ''" @input="setOverall($event.target.value)">
-              <p id="mark-score-help" class="mt-2 text-muted text-sm">Out of {{ open()?.maxPoints }}, {{ open()?.passPoints }} to pass.</p>
+              <p id="mark-score-help" class="mt-2 text-muted text-sm">Out of {{ open()?.maxPoints }}{{ open()?.essay ? '. The quiz result follows once every essay answer is marked.' : ', ' + open()?.passPoints + ' to pass.' }}</p>
             </div>
 
             <div class="mt-4">

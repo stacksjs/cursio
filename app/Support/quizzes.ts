@@ -9,7 +9,7 @@ import type { EnrollmentRow, LearnerProgress } from './enrollment'
 import type { AnswerKey, GradableQuestion, QuestionDraft, QuestionKind } from './grading'
 import { db } from '@stacksjs/database'
 import { completeLesson, enrollmentOf, progressOf, utc } from './enrollment'
-import { attemptsLeft, countsAsUsed, deadlineOf, gradeAttempt, isLate, optionKinds, parseAccepted, questionProblem, shuffled } from './grading'
+import { attemptsLeft, countsAsUsed, deadlineOf, ESSAY_MAX_LENGTH, essayPoints, gradeAttempt, isLate, manualKinds, optionKinds, parseAccepted, questionProblem, shuffled, tally } from './grading'
 import { isPermutation } from './progress'
 
 export class QuizError extends Error {}
@@ -221,7 +221,7 @@ export interface AttemptRow {
   quiz_id: number
   user_id: number
   enrollment_id: number
-  status: 'open' | 'submitted' | 'expired' | 'voided'
+  status: 'open' | 'review' | 'submitted' | 'expired' | 'voided'
   score_points: number
   max_points: number
   percent: number
@@ -341,12 +341,22 @@ async function expireStale(quiz: QuizRow, attempts: AttemptRow[], at: Date): Pro
   return attempts
 }
 
+/** What a marker said about one essay answer, once it is marked. */
+export interface EssayNote {
+  prompt: string
+  points: number
+  max: number
+  feedback: string | null
+}
+
 export interface AttemptSummary {
   id: number
+  /** `review`: handed in, with an essay answer still waiting for a marker. */
   status: AttemptRow['status']
   percent: number
   passed: boolean
   submittedAt: string | null
+  notes: EssayNote[]
 }
 
 export interface OpenAttempt {
@@ -367,6 +377,8 @@ export interface LearnerQuiz {
   /** Null: no limit. */
   attemptsLeft: number | null
   passed: boolean
+  /** An Attempt is with a marker. No new one starts until its result is in. */
+  waiting: boolean
   /** The Attempt in progress, if the Learner left one open. */
   open: OpenAttempt | null
 }
@@ -381,7 +393,26 @@ function openAttempt(attempt: AttemptRow, quiz: QuizRow, questions: StudioQuesti
   }
 }
 
-function describe(quiz: QuizRow, questions: StudioQuestion[], attempts: AttemptRow[]): LearnerQuiz {
+/** Marked essay answers of these Attempts, by Attempt. */
+async function notesOf(attemptIds: number[], questions: StudioQuestion[]): Promise<Map<number, EssayNote[]>> {
+  const result = new Map<number, EssayNote[]>()
+  const essays = questions.filter(question => manualKinds.includes(question.kind))
+  if (attemptIds.length === 0 || essays.length === 0)
+    return result
+
+  const rows = await db.selectFrom('attempt_answers').select(['quiz_attempt_id', 'question_id', 'points_awarded', 'feedback']).where('quiz_attempt_id', 'in', attemptIds).where('question_id', 'in', essays.map(question => question.id)).where('graded_by', 'is not', null).execute() as { quiz_attempt_id: number, question_id: number, points_awarded: number, feedback: string | null }[]
+  for (const row of rows) {
+    const question = essays.find(item => item.id === row.question_id)
+    if (!question)
+      continue
+    const notes = result.get(row.quiz_attempt_id) ?? []
+    notes.push({ prompt: question.prompt, points: row.points_awarded, max: question.points, feedback: row.feedback })
+    result.set(row.quiz_attempt_id, notes)
+  }
+  return result
+}
+
+function describe(quiz: QuizRow, questions: StudioQuestion[], attempts: AttemptRow[], notes: Map<number, EssayNote[]> = new Map()): LearnerQuiz {
   const closed = attempts.filter(attempt => attempt.status !== 'open')
   const open = attempts.find(attempt => attempt.status === 'open')
 
@@ -391,9 +422,10 @@ function describe(quiz: QuizRow, questions: StudioQuestion[], attempts: AttemptR
     timeLimitSeconds: quiz.time_limit_seconds,
     questionCount: questions.length,
     totalPoints: questions.reduce((sum, question) => sum + question.points, 0),
-    attempts: closed.map(attempt => ({ id: attempt.id, status: attempt.status, percent: attempt.percent, passed: attempt.passed, submittedAt: attempt.submitted_at })),
+    attempts: closed.map(attempt => ({ id: attempt.id, status: attempt.status, percent: attempt.percent, passed: attempt.passed, submittedAt: attempt.submitted_at, notes: notes.get(attempt.id) ?? [] })),
     attemptsLeft: attemptsLeft(quiz.max_attempts, attempts.length),
     passed: closed.some(attempt => attempt.passed),
+    waiting: closed.some(attempt => attempt.status === 'review'),
     open: open ? openAttempt(open, quiz, questions) : null,
   }
 }
@@ -401,7 +433,8 @@ function describe(quiz: QuizRow, questions: StudioQuestion[], attempts: AttemptR
 export async function quizForLearner(userId: number, lessonId: number, at: Date = new Date()): Promise<LearnerQuiz> {
   const { quiz, enrollment } = await sittingOf(userId, lessonId, at)
   const attempts = await expireStale(quiz, await attemptsOf(quiz.id, enrollment.id), at)
-  return describe(quiz, await questionsOf(quiz.id), attempts)
+  const questions = await questionsOf(quiz.id)
+  return describe(quiz, questions, attempts, await notesOf(attempts.map(attempt => attempt.id), questions))
 }
 
 /**
@@ -419,6 +452,8 @@ export async function startAttempt(userId: number, lessonId: number, at: Date = 
   if (open)
     return openAttempt(open, quiz, questions)
 
+  if (attempts.some(attempt => attempt.status === 'review'))
+    throw new QuizError('Your last attempt is waiting for a mark.')
   if (attemptsLeft(quiz.max_attempts, attempts.length) === 0)
     throw new QuizError('You have used every attempt at this quiz.')
 
@@ -453,6 +488,8 @@ export interface AttemptResult {
   max: number
   percent: number
   passed: boolean
+  /** An essay answer is with a marker: the score so far is not the result. */
+  pending: boolean
   revealed: boolean
   questions: ReviewedQuestion[]
   quiz: LearnerQuiz
@@ -492,12 +529,19 @@ export async function submitAttempt(userId: number, attemptId: number, responses
   }
 
   const questions = await questionsOf(quiz.id)
+  // An essay is kept whole or cut at a fixed length, never cut mid-JSON.
+  for (const question of questions) {
+    const response = responses[question.id]
+    if (manualKinds.includes(question.kind) && typeof response === 'string')
+      responses[question.id] = response.trim().slice(0, ESSAY_MAX_LENGTH)
+  }
   const graded = gradeAttempt(questions.map(gradable), responses, quiz.pass_percent)
 
   // Claim the Attempt first: of two submissions racing, only the one that
-  // flips `open` to `submitted` goes on to write answers.
+  // flips `open` away goes on to write answers. With an essay to mark it
+  // waits in `review`, and `markEssay` finishes it.
   const claimed = await db.updateTable('quiz_attempts').set({
-    status: 'submitted',
+    status: graded.pending ? 'review' : 'submitted',
     score_points: graded.score,
     max_points: graded.max,
     percent: graded.percent,
@@ -516,6 +560,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
       response: response === undefined ? null : JSON.stringify(response).slice(0, 8000),
       is_correct: answer.correct,
       points_awarded: answer.points,
+      graded_at: answer.pending ? null : stamp,
     }).execute()
   }
 
@@ -525,7 +570,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
     courseCompleted = done.enrollment.status === 'completed'
   }
 
-  const revealed = quiz.reveal === 'after_submit' || (quiz.reveal === 'after_pass' && graded.passed)
+  const revealed = !graded.pending && (quiz.reveal === 'after_submit' || (quiz.reveal === 'after_pass' && graded.passed))
   const attempts = await attemptsOf(quiz.id, enrollment.id)
 
   return {
@@ -534,6 +579,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
     max: graded.max,
     percent: graded.percent,
     passed: graded.passed,
+    pending: graded.pending,
     revealed,
     questions: graded.answers.map((answer) => {
       const question = questions.find(item => item.id === answer.questionId) as StudioQuestion
@@ -545,4 +591,128 @@ export async function submitAttempt(userId: number, attemptId: number, responses
     progress: await progressOf(enrollment, at),
     courseCompleted,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Marking essay answers
+// ---------------------------------------------------------------------------
+
+export interface EssayToMark {
+  answerId: number
+  attemptId: number
+  lessonId: number
+  lessonTitle: string
+  learner: { name: string, email: string }
+  prompt: string
+  response: string
+  max: number
+  submittedAt: string | null
+}
+
+function essayText(raw: string | null): string {
+  try {
+    const value: unknown = JSON.parse(raw ?? '""')
+    return typeof value === 'string' ? value : ''
+  }
+  catch {
+    return ''
+  }
+}
+
+/** Essay answers of this Course that wait for a marker, oldest first. */
+export async function essaysToMark(course: CourseRow): Promise<EssayToMark[]> {
+  const quizzes = await db.selectFrom('quizzes').select(['id', 'lesson_id']).where('course_id', '=', course.id).execute() as { id: number, lesson_id: number }[]
+  if (quizzes.length === 0)
+    return []
+  const attempts = await db.selectFrom('quiz_attempts').select(['id', 'quiz_id', 'user_id', 'submitted_at']).where('quiz_id', 'in', quizzes.map(quiz => quiz.id)).where('status', '=', 'review').execute() as { id: number, quiz_id: number, user_id: number, submitted_at: string | null }[]
+  if (attempts.length === 0)
+    return []
+
+  const answers = await db.selectFrom('attempt_answers').select(['id', 'quiz_attempt_id', 'question_id', 'response']).where('quiz_attempt_id', 'in', attempts.map(attempt => attempt.id)).where('graded_at', 'is', null).execute() as { id: number, quiz_attempt_id: number, question_id: number, response: string | null }[]
+  if (answers.length === 0)
+    return []
+
+  const questions = await db.selectFrom('questions').select(['id', 'prompt', 'points']).where('id', 'in', answers.map(answer => answer.question_id)).execute() as { id: number, prompt: string, points: number }[]
+  const lessons = await db.selectFrom('lessons').select(['id', 'title']).where('id', 'in', quizzes.map(quiz => quiz.lesson_id)).execute() as { id: number, title: string }[]
+  const users = await db.selectFrom('users').select(['id', 'name', 'email']).where('id', 'in', attempts.map(attempt => attempt.user_id)).execute() as { id: number, name: string | null, email: string }[]
+
+  return answers
+    .flatMap((answer) => {
+      const attempt = attempts.find(row => row.id === answer.quiz_attempt_id)
+      const question = questions.find(row => row.id === answer.question_id)
+      const quiz = quizzes.find(row => row.id === attempt?.quiz_id)
+      if (!attempt || !question || !quiz)
+        return []
+      const user = users.find(row => row.id === attempt.user_id)
+      return [{
+        answerId: answer.id,
+        attemptId: attempt.id,
+        lessonId: quiz.lesson_id,
+        lessonTitle: lessons.find(row => row.id === quiz.lesson_id)?.title ?? 'Quiz',
+        learner: { name: user?.name?.trim() || 'Learner', email: user?.email ?? '' },
+        prompt: question.prompt,
+        response: essayText(answer.response),
+        max: question.points,
+        submittedAt: attempt.submitted_at,
+      }]
+    })
+    .sort((a, b) => String(a.submittedAt).localeCompare(String(b.submittedAt)) || a.answerId - b.answerId)
+}
+
+/**
+ * Give an essay answer its points. When it was the last one waiting, the
+ * Attempt gets its result: a pass completes the Lesson, as an instant pass
+ * would have. A mark is given once; the Attempt it belongs to may already
+ * have turned into a result the Learner has seen.
+ */
+export async function markEssay(course: CourseRow, answerId: number, graderId: number, input: { points?: unknown, feedback?: string }, at: Date = new Date()): Promise<{ finished: boolean, passed: boolean, percent: number }> {
+  const answer = await db.selectFrom('attempt_answers').select(['id', 'quiz_attempt_id', 'question_id', 'graded_at']).where('id', '=', answerId).executeTakeFirst() as { id: number, quiz_attempt_id: number, question_id: number, graded_at: string | null } | undefined
+  const raw = answer ? await db.selectFrom('quiz_attempts').select([...attemptColumns]).where('id', '=', answer.quiz_attempt_id).executeTakeFirst() as Record<string, unknown> | undefined : undefined
+  const attempt = raw ? attemptFrom(raw) : null
+  const quizRow = attempt ? await db.selectFrom('quizzes').select([...quizColumns]).where('id', '=', attempt.quiz_id).where('course_id', '=', course.id).executeTakeFirst() as Record<string, unknown> | undefined : undefined
+  if (!answer || !attempt || !quizRow)
+    throw new QuizError('That answer is not part of this course.')
+  const quiz = quizFrom(quizRow)
+
+  if (attempt.status !== 'review' || answer.graded_at)
+    throw new QuizError(attempt.status === 'voided' ? 'This attempt was given back to the learner.' : 'This answer has already been marked.')
+
+  const question = await db.selectFrom('questions').select(['id', 'points']).where('id', '=', answer.question_id).executeTakeFirst() as { id: number, points: number } | undefined
+  if (!question)
+    throw new QuizError('That answer is not part of this course.')
+  const points = essayPoints(input.points, question.points)
+  if (points === null)
+    throw new QuizError(`Give a whole number of points from 0 to ${question.points}.`)
+
+  const stamp = at.toISOString()
+  // Claim the answer: of two markers pressing at once, one mark is kept.
+  const claimed = await db.updateTable('attempt_answers').set({
+    points_awarded: points,
+    is_correct: points === question.points,
+    feedback: input.feedback?.trim().slice(0, 10000) || null,
+    graded_at: stamp,
+    graded_by: graderId,
+    updated_at: stamp,
+  }).where('id', '=', answer.id).where('graded_at', 'is', null).returning(['id']).execute() as { id: number }[]
+  if (claimed.length === 0)
+    throw new QuizError('This answer has already been marked.')
+
+  const all = await db.selectFrom('attempt_answers').select(['points_awarded', 'graded_at']).where('quiz_attempt_id', '=', attempt.id).execute() as { points_awarded: number, graded_at: string | null }[]
+  if (all.some(row => !row.graded_at))
+    return { finished: false, passed: false, percent: attempt.percent }
+
+  const score = all.reduce((sum, row) => sum + row.points_awarded, 0)
+  const result = tally(score, attempt.max_points, quiz.pass_percent)
+  const closed = await db.updateTable('quiz_attempts').set({ status: 'submitted', score_points: score, percent: result.percent, passed: result.passed, updated_at: stamp }).where('id', '=', attempt.id).where('status', '=', 'review').returning(['id']).execute() as { id: number }[]
+
+  if (closed.length > 0 && result.passed) {
+    try {
+      await completeLesson(attempt.user_id, quiz.lesson_id, at, { earned: true })
+    }
+    catch {
+      // The Learner's access was removed since they sat the Quiz: the result
+      // stands, and there is no Lesson to complete for them.
+    }
+  }
+  return { finished: true, passed: result.passed, percent: result.percent }
 }

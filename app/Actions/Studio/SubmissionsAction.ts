@@ -2,10 +2,11 @@ import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
 import { submissionsOf } from '../../Support/assignments'
 import { refusal, studioCourse } from '../../Support/http'
+import { essaysToMark } from '../../Support/quizzes'
 
 export default new Action({
   name: 'StudioSubmissions',
-  description: 'The work handed in for a course, waiting first',
+  description: 'What waits for a marker in a course: handed-in work and essay answers',
   method: 'GET',
 
   async handle(request: RequestInstance) {
@@ -14,7 +15,7 @@ export default new Action({
       return context
 
     try {
-      return response.json({ submissions: await submissionsOf(context.course) })
+      return response.json({ submissions: await submissionsOf(context.course), essays: await essaysToMark(context.course) })
     }
     catch (error) {
       return refusal(error)

@@ -287,7 +287,7 @@ async function submitQuiz() {
   problem.set('')
   const answers = {}
   for (const question of sitting.questions) {
-    if (question.kind === 'text' || question.kind === 'number')
+    if (question.kind === 'text' || question.kind === 'number' || question.kind === 'essay')
       answers[question.id] = typed[question.id] ?? ''
     else if (question.kind === 'ordering')
       answers[question.id] = orders()[question.id] || []
@@ -368,6 +368,12 @@ function workStatus() {
   if (work.status === 'returned')
     return `Returned with ${work.score} of ${task().maxPoints}. You can hand it in again.`
   return 'Handed in. It is waiting to be marked.'
+}
+
+/** What a marker wrote back on the essay answers, newest attempt first. */
+function markerNotes() {
+  const attempts = quiz()?.attempts || []
+  return [...attempts].reverse().flatMap(item => item.notes || [])
 }
 
 function attemptsNote() {
@@ -547,11 +553,22 @@ onMount(async () => {
             </dl>
 
             <div class="mt-6 p-5 rounded-2xl" :class="result()?.passed ? 'bg-accent-soft' : 'bg-tint'" :hidden="result() === null" hidden role="status">
-              <p class="font-semibold text-2xl text-ink tracking-tight">{{ result()?.passed ? 'Passed' : 'Not passed yet' }}</p>
-              <p class="mt-1 text-ink"><span class="font-semibold tabular-nums">{{ result()?.percent }}%</span>, {{ result()?.score }} of {{ result()?.max }} points</p>
+              <p class="font-semibold text-2xl text-ink tracking-tight">{{ result()?.pending ? 'Handed in' : (result()?.passed ? 'Passed' : 'Not passed yet') }}</p>
+              <p class="mt-1 text-ink" :hidden="result()?.pending"><span class="font-semibold tabular-nums">{{ result()?.percent }}%</span>, {{ result()?.score }} of {{ result()?.max }} points</p>
+              <p class="mt-1 text-ink" :hidden="!result()?.pending">Your written answers are with your instructor. The result shows here once they are marked.</p>
             </div>
 
-            <ol class="flex flex-col gap-3 mt-4" :hidden="result() === null" hidden>
+            <p class="mt-6 p-5 text-ink bg-tint rounded-2xl" :hidden="!quiz()?.waiting || result() !== null" hidden role="status">Your last attempt is waiting for a mark. The result shows here once your instructor has read it.</p>
+
+            <ul class="flex flex-col gap-3 mt-4" :hidden="markerNotes().length === 0 || result() !== null">
+              <li :for="note in markerNotes()" class="p-4 border border-line rounded-xl">
+                <p class="text-ink text-sm">{{ note.prompt }}</p>
+                <p class="mt-1 font-medium tabular-nums text-ink text-sm">{{ note.points }} of {{ note.max }} points</p>
+                <p class="mt-1 text-muted text-sm whitespace-pre-line" :hidden="!note.feedback">{{ note.feedback || '' }}</p>
+              </li>
+            </ul>
+
+            <ol class="flex flex-col gap-3 mt-4" :hidden="result() === null || result()?.pending" hidden>
               <li :for="item in reviewed()" class="flex gap-3 items-start">
                 <span class="shrink-0 mt-0.5 size-5" :class="item.correct ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-cancel-circle text-muted'" aria-hidden="true"></span>
                 <div class="min-w-0">
@@ -563,7 +580,7 @@ onMount(async () => {
             </ol>
 
             <div class="flex flex-wrap gap-4 items-center mt-6">
-              <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="quiz()?.attemptsLeft === 0" :disabled="busy()" @click="startQuiz()">{{ (quiz()?.attempts.length || 0) > 0 ? 'Try again' : 'Start the quiz' }}</button>
+              <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="quiz()?.attemptsLeft === 0 || quiz()?.waiting" :disabled="busy()" @click="startQuiz()">{{ (quiz()?.attempts.length || 0) > 0 ? 'Try again' : 'Start the quiz' }}</button>
               <p class="text-muted text-sm" x-text="attemptsNote()"></p>
               <p class="font-medium text-accent text-sm" :hidden="!quiz()?.passed" hidden>Passed</p>
             </div>
@@ -600,6 +617,8 @@ onMount(async () => {
                     <span>{{ option.label }}</span>
                   </button>
                 </div>
+                <textarea :hidden="question.kind !== 'essay'" rows="7" maxlength="7000" class="mt-3 px-4 py-3 max-w-[70ch] w-full leading-relaxed text-ink bg-page border border-line rounded-xl" :aria-label="'Your answer to question ' + (index + 1)" @input="type(question.id, $event.target.value)"></textarea>
+                <p class="mt-1 text-muted text-xs" :hidden="question.kind !== 'essay'">Your instructor reads and marks this answer.</p>
                 <input :hidden="question.kind !== 'text' && question.kind !== 'number'" :type="question.kind === 'number' ? 'number' : 'text'" step="any" autocomplete="off" class="mt-3 px-4 h-11 max-w-sm w-full text-ink bg-page border border-line rounded-xl" :aria-label="'Your answer to question ' + (index + 1)" @input="type(question.id, $event.target.value)">
               </li>
             </ol>

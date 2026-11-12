@@ -14742,6 +14742,30 @@
             "isUnique": false,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "feedback",
+            "type": "text",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "graded_at",
+            "type": "date",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "graded_by",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
           }
         ],
         "indexes": [
@@ -14930,7 +14954,8 @@
               "text",
               "number",
               "ordering",
-              "matching"
+              "matching",
+              "essay"
             ]
           },
           {
@@ -15264,6 +15289,7 @@
             "defaultValue": "open",
             "enumValues": [
               "open",
+              "review",
               "submitted",
               "expired",
               "voided"
@@ -15688,7 +15714,7 @@
       }
     ]
   },
-  "hash": "c071b7ac4e3edce86201555f9126a10eb1336986caeb4081e837f500f06a9b20",
+  "hash": "cd8b462893457f25f43d3122ebde25aa4e91b61374b0ebe768c4b0b24bf15537",
   "dialect": "sqlite",
-  "updatedAt": "2026-11-12T15:12:26.591Z"
+  "updatedAt": "2026-11-12T17:33:04.931Z"
 }

@@ -67,6 +67,9 @@ declare module '@stacksjs/database' {
       response: string
       is_correct: number
       points_awarded: number
+      feedback: string
+      graded_at: string
+      graded_by: number
       quiz_attempt_id: number
       question_id: number
     }
@@ -1457,7 +1460,7 @@ declare module '@stacksjs/database' {
       id: number
       created_at: string
       updated_at: string | null
-      kind: "single" | "multiple" | "true_false" | "text" | "number" | "ordering" | "matching"
+      kind: "single" | "multiple" | "true_false" | "text" | "number" | "ordering" | "matching" | "essay"
       prompt: string
       explanation: string
       points: number
@@ -1487,7 +1490,7 @@ declare module '@stacksjs/database' {
       uuid: string
       created_at: string
       updated_at: string | null
-      status: "open" | "submitted" | "expired" | "voided"
+      status: "open" | "review" | "submitted" | "expired" | "voided"
       score_points: number
       max_points: number
       percent: number

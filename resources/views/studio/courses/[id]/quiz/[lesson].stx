@@ -11,7 +11,7 @@ import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-a
 const courseHome = `/studio/courses/{{ courseId }}`
 const base = `/api/studio/courses/{{ courseId }}/lessons/{{ lessonId }}/quiz`
 
-const kindLabels = { single: 'One answer', multiple: 'Several answers', true_false: 'True or false', text: 'Typed answer', number: 'Number', ordering: 'Put in order', matching: 'Match pairs' }
+const kindLabels = { single: 'One answer', multiple: 'Several answers', true_false: 'True or false', text: 'Typed answer', number: 'Number', ordering: 'Put in order', matching: 'Match pairs', essay: 'Essay' }
 
 const loading = state(true)
 const loaded = state(false)
@@ -82,6 +82,8 @@ function removePair(index) {
 }
 
 function describeAnswer(question) {
+  if (question.kind === 'essay')
+    return 'Marked by you'
   if (question.kind === 'text')
     return (question.accepted?.answers || []).join(', ')
   if (question.kind === 'matching')
@@ -309,6 +311,7 @@ onMount(() => {
           <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'number' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'number'" @click="setKind('number')">Number</button>
           <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'ordering' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'ordering'" @click="setKind('ordering')">Put in order</button>
           <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'matching' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'matching'" @click="setKind('matching')">Match pairs</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'essay' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'essay'" @click="setKind('essay')">Essay</button>
         </div>
       </fieldset>
 
@@ -316,6 +319,8 @@ onMount(() => {
         <label for="question-prompt" class="block font-medium text-ink text-sm">Question</label>
         <textarea id="question-prompt" x-model="prompt" rows="2" required class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
       </div>
+
+      <p class="mt-4 p-4 max-w-[65ch] text-muted text-sm bg-tint rounded-xl" :hidden="kind() !== 'essay'" hidden>Learners answer in their own words. You read each answer under Marking and give it points; the quiz result waits until you have.</p>
 
       <fieldset class="mt-4" :hidden="kind() !== 'single' && kind() !== 'multiple' && kind() !== 'ordering'">
         <legend class="font-medium text-ink text-sm">{{ kind() === 'ordering' ? 'Items' : 'Answers' }}</legend>

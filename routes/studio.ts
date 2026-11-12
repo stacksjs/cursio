@@ -33,3 +33,4 @@ route.get('/courses/{id}/lessons/{lesson}/assignment', 'Actions/Studio/Assignmen
 route.patch('/courses/{id}/lessons/{lesson}/assignment', 'Actions/Studio/UpdateAssignmentAction')
 route.get('/courses/{id}/submissions', 'Actions/Studio/SubmissionsAction')
 route.post('/courses/{id}/submissions/{submission}/mark', 'Actions/Studio/MarkSubmissionAction')
+route.post('/courses/{id}/essays/{answer}/mark', 'Actions/Studio/MarkEssayAction')

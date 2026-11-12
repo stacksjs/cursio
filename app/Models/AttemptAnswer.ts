@@ -4,7 +4,8 @@ import { schema } from '@stacksjs/validation'
 /**
  * What a Learner answered to one question in one Attempt, and what it earned.
  * `response` is JSON: option ids for a choice question, a string or a number
- * otherwise.
+ * otherwise. An essay answer waits for a person: `gradedAt` stays empty until
+ * staff give it points, and `feedback` is what they wrote back.
  */
 export default defineModel({
   name: 'AttemptAnswer',
@@ -47,6 +48,22 @@ export default defineModel({
       order: 3,
       validation: { rule: schema.number().min(0) },
       factory: () => 0,
+    },
+
+    feedback: {
+      order: 4,
+      type: 'text',
+      validation: { rule: schema.string().max(10000) },
+    },
+
+    gradedAt: {
+      order: 5,
+      validation: { rule: schema.date() },
+    },
+
+    gradedBy: {
+      order: 6,
+      validation: { rule: schema.number() },
     },
   },
 } as const)

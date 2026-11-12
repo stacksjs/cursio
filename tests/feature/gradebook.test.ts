@@ -25,8 +25,8 @@ describe('standings from attempts', () => {
       { quizId: 1, enrollmentId: 7, status: 'voided', percent: 100, passed: true },
       { quizId: 2, enrollmentId: 7, status: 'submitted', percent: 10, passed: false },
     ])
-    expect(result.get('7:1')).toEqual({ attempts: 4, best: 90, passed: true })
-    expect(result.get('7:2')).toEqual({ attempts: 1, best: 10, passed: false })
+    expect(result.get('7:1')).toEqual({ attempts: 4, best: 90, passed: true, waiting: false })
+    expect(result.get('7:2')).toEqual({ attempts: 1, best: 10, passed: false, waiting: false })
     expect(result.get('8:1')).toBeUndefined()
   })
 })
@@ -148,11 +148,11 @@ describe('the gradebook', () => {
 
     expect(adaRow.percent).toBe(100)
     expect(adaRow.status).toBe('completed')
-    expect(adaRow.quizzes[quizId]).toEqual({ attempts: 1, best: 100, passed: true })
+    expect(adaRow.quizzes[quizId]).toEqual({ attempts: 1, best: 100, passed: true, waiting: false })
     expect(adaRow.certificate).toMatch(/^CUR-/)
 
     expect(benRow.percent).toBe(0)
-    expect(benRow.quizzes[quizId]).toEqual({ attempts: 1, best: 0, passed: false })
+    expect(benRow.quizzes[quizId]).toEqual({ attempts: 1, best: 0, passed: false, waiting: false })
     expect(benRow.certificate).toBeNull()
   })
 

@@ -142,7 +142,7 @@ describe('writing a question', () => {
     expect(questionProblem({ kind: 'text', prompt: 'Capital?', answers: ['  '] })).toBeTruthy()
     expect(questionProblem({ kind: 'number', prompt: 'g?', value: null })).toBeTruthy()
     expect(questionProblem({ kind: 'single', prompt: '   ', options: two })).toBeTruthy()
-    expect(questionProblem({ kind: 'essay', prompt: 'Discuss', options: two })).toBeTruthy()
+    expect(questionProblem({ kind: 'hotspot', prompt: 'Point at it', options: two })).toBeTruthy()
     expect(questionProblem({ kind: 'single', prompt: 'Pick', options: two, points: 0 })).toBeTruthy()
   })
 

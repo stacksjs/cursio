@@ -33,7 +33,7 @@ export default defineModel({
       default: 'single',
       order: 1,
       fillable: true,
-      validation: { rule: schema.enum(['single', 'multiple', 'true_false', 'text', 'number', 'ordering', 'matching']) },
+      validation: { rule: schema.enum(['single', 'multiple', 'true_false', 'text', 'number', 'ordering', 'matching', 'essay']) },
       factory: () => 'single',
     },
 

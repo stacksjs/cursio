@@ -7,7 +7,7 @@ import { AssignmentError, assignmentForLearner, assignmentForStudio, markFrom, m
 import { certificateOf } from '../../app/Support/certificates'
 import { addLesson, addSection, CourseError, createCourse, deleteLesson, publishCourse, updateLesson } from '../../app/Support/courses'
 import { completeLesson, enroll, enrollmentOf, previewLesson, progressOf } from '../../app/Support/enrollment'
-import { setAccess } from '../../app/Support/gradebook'
+import { gradebookCsv, gradebookOf, setAccess } from '../../app/Support/gradebook'
 
 /** Work handed in by a Learner and marked by staff, with and without a rubric. */
 
@@ -221,6 +221,19 @@ describe('handing in and marking', () => {
 
   test('the queue shows waiting work first', async () => {
     expect((await submissionsOf(course)).map(entry => entry.status)).toEqual(['submitted', 'passed'])
+  })
+
+  test('the gradebook shows the mark, and waiting work is not a zero', async () => {
+    const book = await gradebookOf(course)
+    expect(book.assignments).toMatchObject([{ lessonId: essayId, maxPoints: 30 }])
+    const row = (user: number) => book.learners.find(learner => learner.userId === user)!
+    expect(row(ada).assignments[essayId]).toEqual({ status: 'passed', score: 27 })
+    expect(row(ben).assignments[essayId]).toEqual({ status: 'submitted', score: null })
+
+    const lines = gradebookCsv(book).trim().split('\r\n')
+    expect(lines[0]).toContain('(of 30)')
+    expect(lines.find(line => line.includes('"27"'))).toBeDefined()
+    expect(lines.find(line => line.includes('"Waiting"'))).toBeDefined()
   })
 
   test('marking a learner whose access was removed keeps the mark and completes nothing', async () => {

@@ -16,6 +16,7 @@ const loaded = state(false)
 const problem = state('')
 const busy = state(false)
 const quizzes = state([])
+const assignments = state([])
 const learners = state([])
 const pendingRemove = state(0)
 // The export as a link the browser can save: filled in once it is fetched.
@@ -37,16 +38,50 @@ function statusText(learner) {
   return learner.status === 'completed' ? `Completed ${day(learner.completedAt)}` : `Enrolled ${day(learner.enrolledAt)}`
 }
 
-/** One line per quiz for a learner: its title and how they stand on it. */
+function workText(assignment, work) {
+  if (!work)
+    return 'Not handed in'
+  if (work.status === 'submitted')
+    return 'Waiting for a mark'
+  return `${work.score} of ${assignment.maxPoints}, ${work.status === 'passed' ? 'passed' : 'returned'}`
+}
+
+/** One line per quiz and assignment for a learner: its title and how they stand on it. */
 function results(learner) {
+  const work = assignments().map((assignment) => {
+    const standing = learner.assignments[assignment.lessonId]
+    return {
+      lessonId: assignment.lessonId,
+      title: assignment.title,
+      text: workText(assignment, standing),
+      passed: standing?.status === 'passed',
+      canReopen: false,
+      icon: 'i-hugeicons-task-01',
+    }
+  })
+  return [...quizResults(learner), ...work]
+}
+
+function quizText(standing) {
+  if (!standing)
+    return 'Not attempted'
+  const tries = `${standing.attempts} ${standing.attempts === 1 ? 'attempt' : 'attempts'}`
+  const waiting = standing.waiting ? ', waiting for a mark' : ''
+  if (standing.best === null)
+    return `Waiting for a mark (${tries})`
+  return `${standing.best}%${standing.passed ? ', passed' : ''}${waiting} (${tries})`
+}
+
+function quizResults(learner) {
   return quizzes().map((quiz) => {
     const standing = learner.quizzes[quiz.lessonId]
     return {
       lessonId: quiz.lessonId,
       title: quiz.title,
-      text: standing ? `${standing.best}%${standing.passed ? ', passed' : ''} (${standing.attempts} ${standing.attempts === 1 ? 'attempt' : 'attempts'})` : 'Not attempted',
+      text: quizText(standing),
       passed: Boolean(standing?.passed),
-      canReopen: Boolean(standing) && !standing.passed,
+      canReopen: Boolean(standing) && !standing.passed && !standing.waiting,
+      icon: 'i-hugeicons-quiz-01',
     }
   })
 }
@@ -55,6 +90,7 @@ async function load() {
   try {
     const data = await dashboardApi(`${base}/gradebook`)
     quizzes.set(data.quizzes)
+    assignments.set(data.assignments)
     learners.set(data.learners)
     loaded.set(true)
   }
@@ -153,9 +189,9 @@ onMount(load)
             <button type="button" class="inline-flex items-center px-3 h-9 font-medium text-ink text-sm hover:bg-tint rounded-full" :hidden="learner.status !== 'revoked'" :disabled="busy()" @click="restore(learner.enrollmentId)">Restore access</button>
           </div>
         </div>
-        <ul class="flex flex-col gap-1 mt-4 pt-4 border-line border-t" :hidden="quizzes().length === 0">
+        <ul class="flex flex-col gap-1 mt-4 pt-4 border-line border-t" :hidden="quizzes().length + assignments().length === 0">
           <li :for="result in results(learner)" class="flex flex-wrap gap-x-3 gap-y-1 items-center text-sm">
-            <span class="shrink-0 size-4" :class="result.passed ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-quiz-01 text-muted'" aria-hidden="true"></span>
+            <span class="shrink-0 size-4" :class="result.passed ? 'i-hugeicons-checkmark-circle-02 text-accent' : result.icon + ' text-muted'" aria-hidden="true"></span>
             <span class="text-ink">{{ result.title }}</span>
             <span class="tabular-nums text-muted">{{ result.text }}</span>
             <button type="button" class="inline-flex items-center px-3 h-9 text-ink text-sm hover:bg-tint rounded-full" :hidden="!result.canReopen" :disabled="busy()" @click="reopen(result.lessonId, learner.enrollmentId)">Give attempts back</button>

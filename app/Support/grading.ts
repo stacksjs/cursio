@@ -7,10 +7,21 @@
  * so the rules can be tested exhaustively and read in one place.
  */
 
-export const questionKinds = ['single', 'multiple', 'true_false', 'text', 'number', 'ordering', 'matching'] as const
+export const questionKinds = ['single', 'multiple', 'true_false', 'text', 'number', 'ordering', 'matching', 'essay'] as const
 export type QuestionKind = typeof questionKinds[number]
 
 export const choiceKinds: readonly QuestionKind[] = ['single', 'multiple', 'true_false']
+
+/** Kinds a person marks: there is no key a machine could hold an answer against. */
+export const manualKinds: readonly QuestionKind[] = ['essay']
+
+/** The longest essay answer that is kept. */
+export const ESSAY_MAX_LENGTH = 7000
+
+/** An essay answer worth a marker's time: text, with something in it. */
+export function isWritten(response: unknown): response is string {
+  return typeof response === 'string' && response.trim() !== ''
+}
 
 /** Kinds whose answers are stored as option rows. For `ordering` the rows are in the right order. */
 export const optionKinds: readonly QuestionKind[] = [...choiceKinds, 'ordering']
@@ -90,6 +101,10 @@ export function isCorrect(question: GradableQuestion, response: unknown): boolea
   if (response === undefined || response === null || response === '')
     return false
 
+  // Never right by machine: an essay earns its points from a marker.
+  if (manualKinds.includes(question.kind))
+    return false
+
   if (question.kind === 'text') {
     if (!question.accepted || !('answers' in question.accepted) || typeof response !== 'string')
       return false
@@ -142,6 +157,8 @@ export interface GradedAnswer {
   questionId: number
   correct: boolean
   points: number
+  /** Written and waiting for a marker. Its points are zero until then. */
+  pending: boolean
 }
 
 export interface GradedAttempt {
@@ -151,20 +168,43 @@ export interface GradedAttempt {
   /** Whole percent, 0 to 100. A Quiz worth nothing is 0, never NaN. */
   percent: number
   passed: boolean
+  /** At least one answer waits for a marker, so the result is not final. */
+  pending: boolean
+}
+
+/** Whole percent and pass for points out of a maximum. */
+export function tally(score: number, max: number, passPercent: number): { percent: number, passed: boolean } {
+  // Passing is decided on the points, not the rounded percent: 69.6% shows as
+  // 70 but has not reached a 70% pass mark.
+  return { percent: max === 0 ? 0 : Math.round((score / max) * 100), passed: max > 0 && score * 100 >= passPercent * max }
+}
+
+/**
+ * Points a marker may give an essay answer: a whole number from zero to what
+ * the question is worth. Anything else is null.
+ */
+export function essayPoints(value: unknown, max: number): number | null {
+  if (value === null || value === undefined || value === '' || typeof value === 'boolean')
+    return null
+  const points = Number(value)
+  return Number.isInteger(points) && points >= 0 && points <= max ? points : null
 }
 
 export function gradeAttempt(questions: GradableQuestion[], responses: Record<number, unknown>, passPercent: number): GradedAttempt {
   const answers = questions.map((question) => {
     const correct = isCorrect(question, responses[question.id])
-    return { questionId: question.id, correct, points: correct ? question.points : 0 }
+    // An essay left blank is simply wrong; only written ones go to a marker.
+    const pending = manualKinds.includes(question.kind) && isWritten(responses[question.id])
+    return { questionId: question.id, correct, points: correct ? question.points : 0, pending }
   })
   const score = answers.reduce((sum, answer) => sum + answer.points, 0)
   const max = questions.reduce((sum, question) => sum + question.points, 0)
-  const percent = max === 0 ? 0 : Math.round((score / max) * 100)
+  const pending = answers.some(answer => answer.pending)
+  const { percent, passed } = tally(score, max, passPercent)
 
-  // Passing is decided on the points, not the rounded percent: 69.6% shows as
-  // 70 but has not reached a 70% pass mark.
-  return { answers, score, max, percent, passed: max > 0 && score * 100 >= passPercent * max }
+  // Nothing passes while a marker still has a say, even when the points so
+  // far are enough: the result is announced once, when it is final.
+  return { answers, score, max, percent, passed: passed && !pending, pending }
 }
 
 /** Attempts still available. Null means there is no limit. */
@@ -238,6 +278,8 @@ export function questionProblem(draft: QuestionDraft): string | null {
     return 'Points are a whole number from 1 to 100.'
 
   const kind = draft.kind as QuestionKind
+  if (kind === 'essay')
+    return null
   if (kind === 'text')
     return (draft.answers ?? []).some(answer => normalizeText(answer) !== '') ? null : 'Add at least one accepted answer.'
 
@@ -298,6 +340,8 @@ export interface QuizStanding {
   /** The best percent among them. Null when there is none yet. */
   best: number | null
   passed: boolean
+  /** An Attempt is with a marker: its result is not in `best` yet. */
+  waiting: boolean
 }
 
 /** Attempts that use up a Learner's allowance. A voided one was given back. */
@@ -312,13 +356,19 @@ export function countsAsUsed(status: string): boolean {
 export function standings(attempts: AttemptFact[]): Map<string, QuizStanding> {
   const result = new Map<string, QuizStanding>()
   for (const attempt of attempts) {
-    if (attempt.status !== 'submitted' && attempt.status !== 'expired')
+    if (attempt.status !== 'submitted' && attempt.status !== 'expired' && attempt.status !== 'review')
       continue
     const key = `${attempt.enrollmentId}:${attempt.quizId}`
-    const standing = result.get(key) ?? { attempts: 0, best: null, passed: false }
+    const standing = result.get(key) ?? { attempts: 0, best: null, passed: false, waiting: false }
     standing.attempts++
-    standing.best = Math.max(standing.best ?? 0, attempt.percent)
-    standing.passed = standing.passed || attempt.passed
+    if (attempt.status === 'review') {
+      // Its percent is only the machine-marked part so far.
+      standing.waiting = true
+    }
+    else {
+      standing.best = Math.max(standing.best ?? 0, attempt.percent)
+      standing.passed = standing.passed || attempt.passed
+    }
     result.set(key, standing)
   }
   return result

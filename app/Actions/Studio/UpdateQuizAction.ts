@@ -26,6 +26,8 @@ export default new Action({
         timeLimitSeconds: number('time_limit_seconds'),
         shuffle: shuffle === undefined || shuffle === null ? undefined : (shuffle === true || shuffle === 'true' || shuffle === 1),
         reveal: sent(request, 'reveal'),
+        questionBankId: number('question_bank_id'),
+        poolSize: number('pool_size'),
       })
       return response.json({ success: true, quiz })
     }

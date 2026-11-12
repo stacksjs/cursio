@@ -1,0 +1,9 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+const pageTitle = 'Question bank - Cursio Studio'
+const bankId = typeof bank !== 'undefined' ? Number(bank) : 0
+const editorBase = `/api/studio/banks/${bankId}`
+</script>
+<QuestionEditor :base="editorBase" back="/studio" label="Back to the studio" :quiz="false" />
+@endsection

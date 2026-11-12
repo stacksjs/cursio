@@ -69,6 +69,17 @@ export default defineModel({
       factory: () => false,
     },
 
+    /**
+     * The ids of the questions this Attempt asks, as JSON. Set when a Quiz
+     * draws from a bank, so the paper handed in is graded against the paper
+     * handed out even if the bank has changed since.
+     */
+    questionIds: {
+      order: 8,
+      type: 'text',
+      validation: { rule: schema.string().max(4000) },
+    },
+
     startedAt: {
       order: 6,
       validation: { rule: schema.date() },

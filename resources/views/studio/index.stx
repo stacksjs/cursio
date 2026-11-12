@@ -20,6 +20,8 @@ const busy = state(false)
 const academyName = state('')
 const academySlug = state('')
 const courseTitle = state('')
+const bankList = state([])
+const newBankTitle = state('')
 
 async function load() {
   if (!useAuth().getToken()) {
@@ -34,6 +36,7 @@ async function load() {
     academy.set(data.academy)
     academies.set(data.academies || [])
     courses.set(data.courses)
+    bankList.set(data.banks || [])
   }
   catch (error) {
     if (error?.status === 401)
@@ -42,6 +45,24 @@ async function load() {
       problem.set(error?.message || 'The studio could not be loaded.')
   }
   loading.set(false)
+}
+
+async function createBank() {
+  busy.set(true)
+  problem.set('')
+  try {
+    const data = await dashboardApi('/api/studio/banks', { method: 'POST', body: { title: newBankTitle(), academy_id: academy().id } })
+    navigate(`/studio/banks/${data.bank.id}`)
+  }
+  catch (error) {
+    problem.set(error?.message || 'The bank could not be created.')
+    busy.set(false)
+  }
+}
+
+function bankLine(bank) {
+  const questions = `${bank.questions} ${bank.questions === 1 ? 'question' : 'questions'}`
+  return bank.quizzes > 0 ? `${questions}, drawn by ${bank.quizzes} ${bank.quizzes === 1 ? 'quiz' : 'quizzes'}` : questions
 }
 
 async function openAcademy() {
@@ -150,6 +171,26 @@ onMount(load)
         </a>
       </li>
     </ul>
+
+    <section class="mt-14" aria-labelledby="banks-heading">
+      <h2 id="banks-heading" class="font-semibold text-ink text-xl tracking-tight">Question banks</h2>
+      <p class="mt-1 max-w-[65ch] text-muted text-sm">Questions kept apart from any one quiz. A quiz that draws from a bank asks each attempt a different handful.</p>
+      <ul class="flex flex-col gap-3 mt-5">
+        <li :for="bank in bankList()">
+          <a :href="`/studio/banks/${bank.id}`" class="flex gap-4 items-center justify-between p-5 bg-surface hover:bg-tint border border-line rounded-2xl transition-colors">
+            <span class="font-medium text-ink">{{ bank.title }}</span>
+            <span class="text-muted text-sm">{{ bankLine(bank) }}</span>
+          </a>
+        </li>
+      </ul>
+      <form class="flex flex-col gap-3 sm:flex-row sm:items-end mt-5" @submit.prevent="createBank()">
+        <div class="flex-1">
+          <label for="new-bank-title" class="block font-medium text-ink text-sm">New question bank</label>
+          <input id="new-bank-title" x-model.trim="newBankTitle" type="text" required minlength="2" maxlength="120" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        </div>
+        <button type="submit" class="inline-flex items-center justify-center px-5 h-11 font-medium text-ink whitespace-nowrap border border-line rounded-full disabled:opacity-60" :disabled="busy()">Create bank</button>
+      </form>
+    </section>
   </div>
 </div>
 </template>

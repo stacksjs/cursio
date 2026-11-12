@@ -12,6 +12,8 @@ import { CourseError, courseInAcademy } from './courses'
 import { EnrollmentError } from './enrollment'
 import { QuizError } from './quizzes'
 import { AssignmentError } from './assignments'
+import type { BankRow } from './banks'
+import type { QuestionDraft } from './grading'
 
 /** The signed-in user's id, or null. Never read from the request body. */
 export async function userIdOf(request: RequestInstance): Promise<number | null> {
@@ -79,4 +81,43 @@ export async function studioCourse(request: RequestInstance): Promise<{ userId: 
     return response.notFound('Course not found')
 
   return { userId, academy, course }
+}
+
+/**
+ * The question bank a studio request names in `{bank}`, found only inside an
+ * Academy the caller is staff of. As with a Course, the bank says which
+ * Academy; the caller does not.
+ */
+export async function studioBank(request: RequestInstance): Promise<{ userId: number, academy: AcademyRow, bank: BankRow } | Response> {
+  const userId = await userIdOf(request)
+  if (!userId)
+    return response.unauthorized('Authentication required')
+
+  const bank = await db.selectFrom('question_banks').select(['id', 'academy_id', 'team_id', 'title']).where('id', '=', idParam(request, 'bank')).executeTakeFirst() as BankRow | undefined
+  const academy = bank ? await academyForStaff(userId, bank.academy_id) : null
+  if (!bank || !academy)
+    return response.notFound('Question bank not found')
+
+  return { userId, academy, bank }
+}
+
+/** A question as the editor sends it, whichever home it is being saved to. */
+export function questionDraft(request: RequestInstance): QuestionDraft & { explanation?: string } {
+  const options = request.get('options')
+  const answers = request.get('answers')
+  const value = request.get('value')
+  const pairs = request.get('pairs')
+  return {
+    kind: String(request.get('kind') ?? ''),
+    prompt: String(request.get('prompt') ?? ''),
+    explanation: String(request.get('explanation') ?? ''),
+    points: Number(request.get('points')) || 1,
+    options: Array.isArray(options)
+      ? options.map(option => ({ label: String(option?.label ?? ''), correct: option?.correct === true }))
+      : [],
+    answers: Array.isArray(answers) ? answers.map(String) : [],
+    value: value === undefined || value === null || value === '' ? null : Number(value),
+    tolerance: Number(request.get('tolerance')) || 0,
+    pairs: Array.isArray(pairs) ? pairs.map(pair => ({ left: String(pair?.left ?? ''), right: String(pair?.right ?? '') })) : [],
+  }
 }

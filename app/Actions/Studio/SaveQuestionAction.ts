@@ -1,6 +1,6 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
-import { idParam, refusal, studioCourse } from '../../Support/http'
+import { idParam, questionDraft, refusal, studioCourse } from '../../Support/http'
 import { saveQuestion } from '../../Support/quizzes'
 
 export default new Action({
@@ -13,26 +13,9 @@ export default new Action({
     if (context instanceof Response)
       return context
 
-    const options = request.get('options')
-    const answers = request.get('answers')
-    const value = request.get('value')
-    const pairs = request.get('pairs')
-
     try {
       const questionId = idParam(request, 'question')
-      const question = await saveQuestion(context.course, idParam(request, 'lesson'), {
-        kind: String(request.get('kind') ?? ''),
-        prompt: String(request.get('prompt') ?? ''),
-        explanation: String(request.get('explanation') ?? ''),
-        points: Number(request.get('points')) || 1,
-        options: Array.isArray(options)
-          ? options.map(option => ({ label: String(option?.label ?? ''), correct: option?.correct === true }))
-          : [],
-        answers: Array.isArray(answers) ? answers.map(String) : [],
-        value: value === undefined || value === null || value === '' ? null : Number(value),
-        tolerance: Number(request.get('tolerance')) || 0,
-        pairs: Array.isArray(pairs) ? pairs.map(pair => ({ left: String(pair?.left ?? ''), right: String(pair?.right ?? '') })) : [],
-      }, questionId)
+      const question = await saveQuestion(context.course, idParam(request, 'lesson'), questionDraft(request), questionId)
       return response.json({ success: true, question }, questionId ? 200 : 201)
     }
     catch (error) {

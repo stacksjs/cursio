@@ -15041,6 +15041,19 @@
             "isUnique": false,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "question_bank_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "question_banks",
+              "column": "id",
+              "onDelete": "cascade"
+            }
           }
         ],
         "indexes": []
@@ -15249,6 +15262,27 @@
             "isUnique": true,
             "isNullable": true,
             "hasDefault": false
+          },
+          {
+            "name": "pool_size",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": 0
+          },
+          {
+            "name": "question_bank_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "question_banks",
+              "column": "id"
+            }
           }
         ],
         "indexes": [
@@ -15408,6 +15442,14 @@
             "type": "string",
             "isPrimaryKey": false,
             "isUnique": true,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "question_ids",
+            "type": "text",
+            "isPrimaryKey": false,
+            "isUnique": false,
             "isNullable": true,
             "hasDefault": false
           }
@@ -15711,10 +15753,75 @@
             "type": "unique"
           }
         ]
+      },
+      {
+        "table": "question_banks",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": false
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": false,
+            "maxLength": 120
+          },
+          {
+            "name": "team_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "teams",
+              "column": "id"
+            }
+          },
+          {
+            "name": "academy_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "academies",
+              "column": "id",
+              "onDelete": "cascade"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "datetime",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": "UTC_TIMESTAMP"
+          },
+          {
+            "name": "updated_at",
+            "type": "datetime",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          }
+        ],
+        "indexes": []
       }
     ]
   },
-  "hash": "cd8b462893457f25f43d3122ebde25aa4e91b61374b0ebe768c4b0b24bf15537",
+  "hash": "a01155d180a7088f370299a76c397afb057fca386d3f3837cd3d084118b98702",
   "dialect": "sqlite",
-  "updatedAt": "2026-11-12T17:33:04.931Z"
+  "updatedAt": "2026-11-12T18:27:50.948Z"
 }

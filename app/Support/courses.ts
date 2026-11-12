@@ -171,9 +171,11 @@ export async function publishCourse(course: CourseRow): Promise<CourseRow> {
     throw new CourseError('Add at least one lesson before publishing.')
 
   // A Quiz with no questions is a Lesson nobody can complete.
-  const quizzes = await db.selectFrom('quizzes').select(['id', 'lesson_id']).where('course_id', '=', course.id).execute() as { id: number, lesson_id: number }[]
+  const quizzes = await db.selectFrom('quizzes').select(['id', 'lesson_id', 'question_bank_id', 'pool_size']).where('course_id', '=', course.id).execute() as { id: number, lesson_id: number, question_bank_id: number | null, pool_size: number }[]
   for (const quiz of quizzes) {
     const question = await db.selectFrom('questions').select(['id']).where('quiz_id', '=', quiz.id).executeTakeFirst()
+      // Questions drawn from a bank count: the Quiz need not have its own.
+      ?? (quiz.question_bank_id && quiz.pool_size > 0 ? await db.selectFrom('questions').select(['id']).where('question_bank_id', '=', quiz.question_bank_id).executeTakeFirst() : undefined)
     if (!question) {
       const title = outline.sections.flatMap(section => section.lessons).find(lesson => lesson.id === quiz.lesson_id)?.title ?? 'A quiz'
       throw new CourseError(`"${title}" has no questions yet. Add one before publishing.`)

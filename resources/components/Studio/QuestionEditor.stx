@@ -1,0 +1,511 @@
+<script server>
+// The question editor, for a quiz or for a bank. Props: `base` (where the
+// questions are read and written), `back` and `label` (the link out), and
+// `quiz` (true for a quiz, which also has settings and an order).
+const editorBase = String(base)
+const editorBack = String(back)
+const editorBackLabel = String(label)
+const editorIsQuiz = quiz === true || quiz === 'true'
+</script>
+<script client>
+import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
+
+// The page that includes this says where the questions live (`editorBase`),
+// where "back" goes, and whether they belong to a quiz or to a bank.
+const backHref = {{ editorBack }}
+const base = {{ editorBase }}
+const isQuiz = {{ editorIsQuiz }}
+
+const kindLabels = { single: 'One answer', multiple: 'Several answers', true_false: 'True or false', text: 'Typed answer', number: 'Number', ordering: 'Put in order', matching: 'Match pairs', essay: 'Essay' }
+
+const loading = state(true)
+const loaded = state(false)
+const problem = state('')
+const busy = state(false)
+const saved = state('')
+const pendingDelete = state(0)
+const questions = state([])
+
+const passPercent = state('70')
+const maxAttempts = state('')
+const limitMinutes = state('')
+const shuffle = state(false)
+const reveal = state('after_submit')
+// A quiz may draw extra questions from one of the academy's banks.
+const banks = state([])
+const bankId = state('')
+const poolSize = state('')
+// A bank has a name, and can be deleted whole.
+const bankTitle = state('')
+const pendingBankDelete = state(false)
+
+const editing = state(0)
+const kind = state('single')
+const prompt = state('')
+const explanation = state('')
+const points = state('1')
+const truth = state('true')
+const typedAnswers = state('')
+const numberValue = state('')
+const numberMargin = state('')
+// What is typed into the answer rows lives in `rows`, a plain list, so that a
+// keystroke does not redraw the row being typed in. `options` is redrawn from
+// it only when a row is added, removed or marked.
+let rows = []
+const options = state([])
+// The same arrangement for the pairs of a matching question.
+let pairRows = []
+const pairs = state([])
+
+const totalPoints = derived(() => questions().reduce((sum, question) => sum + question.points, 0))
+
+function drawOptions() {
+  options.set(rows.map(row => ({ ...row })))
+}
+
+function blankRows() {
+  rows = [{ label: '', correct: true }, { label: '', correct: false }, { label: '', correct: false }]
+  drawOptions()
+  pairRows = [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }]
+  drawPairs()
+}
+
+function drawPairs() {
+  pairs.set(pairRows.map(row => ({ ...row })))
+}
+
+function setPair(index, side, value) {
+  if (pairRows[index])
+    pairRows[index][side] = value
+}
+
+function addPair() {
+  if (pairRows.length < 12) {
+    pairRows.push({ left: '', right: '' })
+    drawPairs()
+  }
+}
+
+function removePair(index) {
+  if (pairRows.length > 2) {
+    pairRows.splice(index, 1)
+    drawPairs()
+  }
+}
+
+function describeAnswer(question) {
+  if (question.kind === 'essay')
+    return 'Marked by you'
+  if (question.kind === 'text')
+    return (question.accepted?.answers || []).join(', ')
+  if (question.kind === 'matching')
+    return (question.accepted?.pairs || []).map(pair => `${pair.left} with ${pair.right}`).join(', ')
+  if (question.kind === 'ordering')
+    return question.options.map(option => option.label).join(', then ')
+  if (question.kind === 'number')
+    return question.accepted?.tolerance ? `${question.accepted.value}, give or take ${question.accepted.tolerance}` : String(question.accepted?.value ?? '')
+  return question.options.filter(option => option.is_correct).map(option => option.label).join(', ')
+}
+
+async function load() {
+  try {
+    const data = await dashboardApi(base)
+    questions.set(data.questions)
+    if (data.quiz) {
+      passPercent.set(String(data.quiz.pass_percent))
+      maxAttempts.set(data.quiz.max_attempts ? String(data.quiz.max_attempts) : '')
+      limitMinutes.set(data.quiz.time_limit_seconds ? String(Math.round(data.quiz.time_limit_seconds / 60)) : '')
+      shuffle.set(Boolean(data.quiz.shuffle))
+      reveal.set(data.quiz.reveal)
+      banks.set(data.banks || [])
+      bankId.set(data.quiz.question_bank_id ? String(data.quiz.question_bank_id) : '')
+      poolSize.set(data.quiz.pool_size ? String(data.quiz.pool_size) : '')
+    }
+    if (data.bank)
+      bankTitle.set(data.bank.title)
+    loaded.set(true)
+  }
+  catch (error) {
+    problem.set(error?.status === 401 ? 'Sign in to edit this quiz.' : (error?.message || 'This quiz could not be loaded.'))
+  }
+  loading.set(false)
+}
+
+async function send(method, path, body) {
+  busy.set(true)
+  problem.set('')
+  saved.set('')
+  pendingDelete.set(0)
+  try {
+    await dashboardApi(`${base}${path}`, { method, body })
+    await load()
+    return true
+  }
+  catch (error) {
+    problem.set(error?.message || 'That did not save.')
+    return false
+  }
+  finally {
+    busy.set(false)
+  }
+}
+
+async function saveSettings() {
+  const done = await send('PATCH', '', {
+    pass_percent: Number(passPercent()),
+    max_attempts: Number(maxAttempts()) || 0,
+    time_limit_seconds: (Number(limitMinutes()) || 0) * 60,
+    shuffle: shuffle(),
+    reveal: reveal(),
+    question_bank_id: Number(bankId()) || 0,
+    pool_size: Number(poolSize()) || 0,
+  })
+  if (done)
+    saved.set('Settings saved.')
+}
+
+async function renameBank() {
+  const done = await send('PATCH', '', { title: bankTitle() })
+  if (done)
+    saved.set('Name saved.')
+}
+
+async function deleteBank() {
+  if (!pendingBankDelete()) {
+    pendingBankDelete.set(true)
+    return
+  }
+  busy.set(true)
+  try {
+    await dashboardApi(base, { method: 'DELETE' })
+    navigate(backHref)
+  }
+  catch (error) {
+    problem.set(error?.message || 'The bank could not be deleted.')
+    busy.set(false)
+  }
+}
+
+function clearForm() {
+  editing.set(0)
+  kind.set('single')
+  prompt.set('')
+  explanation.set('')
+  points.set('1')
+  truth.set('true')
+  typedAnswers.set('')
+  numberValue.set('')
+  numberMargin.set('')
+  blankRows()
+}
+
+function edit(questionId) {
+  const question = questions().find(item => item.id === questionId)
+  if (!question)
+    return
+  editing.set(question.id)
+  kind.set(question.kind)
+  prompt.set(question.prompt)
+  explanation.set(question.explanation || '')
+  points.set(String(question.points))
+  typedAnswers.set((question.accepted?.answers || []).join('\n'))
+  numberValue.set(question.kind === 'number' ? String(question.accepted?.value ?? '') : '')
+  numberMargin.set(question.accepted?.tolerance ? String(question.accepted.tolerance) : '')
+  if (question.kind === 'true_false') {
+    truth.set(question.options.find(option => option.is_correct)?.label === 'False' ? 'false' : 'true')
+    blankRows()
+  }
+  else if (question.kind === 'single' || question.kind === 'multiple' || question.kind === 'ordering') {
+    blankRows()
+    rows = question.options.map(option => ({ label: option.label, correct: option.is_correct }))
+    drawOptions()
+  }
+  else if (question.kind === 'matching') {
+    blankRows()
+    pairRows = (question.accepted?.pairs || []).map(pair => ({ ...pair }))
+    drawPairs()
+  }
+  else {
+    blankRows()
+  }
+}
+
+function setLabel(index, value) {
+  if (rows[index])
+    rows[index].label = value
+}
+
+function mark(index) {
+  // One answer: marking a row unmarks the rest. Several: each row toggles.
+  rows = rows.map((row, at) => kind() === 'single'
+    ? { ...row, correct: at === index }
+    : (at === index ? { ...row, correct: !row.correct } : row))
+  drawOptions()
+}
+
+function addRow() {
+  if (rows.length < 12) {
+    rows.push({ label: '', correct: false })
+    drawOptions()
+  }
+}
+
+function removeRow(index) {
+  if (rows.length > 2) {
+    rows.splice(index, 1)
+    drawOptions()
+  }
+}
+
+function setKind(value) {
+  kind.set(value)
+  // Going from several right answers to one: keep the first that was marked.
+  if (value === 'single') {
+    const first = rows.findIndex(row => row.correct)
+    rows = rows.map((row, at) => ({ ...row, correct: at === (first < 0 ? 0 : first) }))
+    drawOptions()
+  }
+}
+
+async function saveQuestion() {
+  const body = {
+    kind: kind(),
+    prompt: prompt(),
+    explanation: explanation(),
+    points: Number(points()) || 1,
+    options: kind() === 'true_false'
+      ? [{ label: 'True', correct: truth() === 'true' }, { label: 'False', correct: truth() === 'false' }]
+      : rows,
+    answers: typedAnswers().split('\n'),
+    pairs: pairRows,
+    value: numberValue(),
+    tolerance: Number(numberMargin()) || 0,
+  }
+  const done = editing()
+    ? await send('PATCH', `/questions/${editing()}`, body)
+    : await send('POST', '/questions', body)
+  if (done)
+    clearForm()
+}
+
+function move(questionId, step) {
+  const ids = questions().map(question => question.id)
+  const from = ids.indexOf(questionId)
+  const to = from + step
+  if (from < 0 || to < 0 || to >= ids.length)
+    return
+  ids.splice(to, 0, ids.splice(from, 1)[0])
+  send('POST', '/reorder', { questions: ids })
+}
+
+function remove(questionId) {
+  if (pendingDelete() !== questionId) {
+    pendingDelete.set(questionId)
+    return
+  }
+  send('DELETE', `/questions/${questionId}`)
+}
+
+onMount(() => {
+  blankRows()
+  load()
+})
+</script>
+<template>
+<div data-stx-content>
+  <a :href="backHref" class="text-muted text-sm hover:text-ink">{{ editorBackLabel }}</a>
+
+  <p class="mt-6 text-muted" :hidden="!loading()">Loading the questions.</p>
+  <p class="mt-6 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+
+  <div :hidden="!loaded()" hidden>
+    @if(editorIsQuiz)
+      <h1 class="mt-4 font-semibold text-3xl text-ink tracking-tight">Quiz questions</h1>
+    @else
+      <h1 class="mt-4 font-semibold text-3xl text-ink tracking-tight">{{ bankTitle() }}</h1>
+      <p class="mt-1 max-w-[65ch] text-muted text-sm">A question bank. A quiz set to draw from it gives each attempt a different handful of these.</p>
+    @endif
+    <p class="mt-1 text-muted text-sm">{{ questions().length }} {{ questions().length === 1 ? 'question' : 'questions' }}, {{ totalPoints() }} {{ totalPoints() === 1 ? 'point' : 'points' }}</p>
+
+    <ol class="flex flex-col gap-3 mt-8">
+      <li :for="question in questions()" class="p-5 bg-surface border border-line rounded-2xl" :class="editing() === question.id ? 'border-accent' : ''">
+        <div class="flex flex-wrap gap-2 items-start justify-between">
+          <div class="flex-1 min-w-0">
+            <p class="text-muted text-xs">{{ kindLabels[question.kind] }}, {{ question.points }} {{ question.points === 1 ? 'point' : 'points' }}</p>
+            <p class="mt-1 font-medium text-ink">{{ question.prompt }}</p>
+            <p class="mt-1 text-muted text-sm">Answer: {{ describeAnswer(question) }}</p>
+          </div>
+          <div class="flex gap-1 items-center">
+            <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move question up" :hidden="!isQuiz" :disabled="busy()" @click="move(question.id, -1)"><span class="size-4 i-hugeicons-arrow-up-01" aria-hidden="true"></span></button>
+            <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move question down" :hidden="!isQuiz" :disabled="busy()" @click="move(question.id, 1)"><span class="size-4 i-hugeicons-arrow-down-01" aria-hidden="true"></span></button>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" @click="edit(question.id)">Edit</button>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" :disabled="busy()" @click="remove(question.id)">{{ pendingDelete() === question.id ? 'Really delete?' : 'Delete' }}</button>
+          </div>
+        </div>
+      </li>
+    </ol>
+    <p class="p-5 text-muted bg-tint rounded-2xl" :hidden="questions().length > 0">{{ editorIsQuiz ? 'No questions of its own yet. A quiz needs at least one, or a bank to draw from, before its course can be published.' : 'No questions yet. Add the first one below.' }}</p>
+
+    <form class="mt-8 p-6 bg-tint rounded-2xl" @submit.prevent="saveQuestion()">
+      <h2 class="font-semibold text-ink text-xl tracking-tight">{{ editing() ? 'Edit question' : 'New question' }}</h2>
+
+      <fieldset class="mt-5">
+        <legend class="font-medium text-ink text-sm">Type</legend>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'single' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'single'" @click="setKind('single')">One answer</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'multiple' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'multiple'" @click="setKind('multiple')">Several answers</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'true_false' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'true_false'" @click="setKind('true_false')">True or false</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'text' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'text'" @click="setKind('text')">Typed answer</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'number' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'number'" @click="setKind('number')">Number</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'ordering' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'ordering'" @click="setKind('ordering')">Put in order</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'matching' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'matching'" @click="setKind('matching')">Match pairs</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'essay' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'essay'" @click="setKind('essay')">Essay</button>
+        </div>
+      </fieldset>
+
+      <div class="mt-4">
+        <label for="question-prompt" class="block font-medium text-ink text-sm">Question</label>
+        <textarea id="question-prompt" x-model="prompt" rows="2" required class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
+      </div>
+
+      <p class="mt-4 p-4 max-w-[65ch] text-muted text-sm bg-tint rounded-xl" :hidden="kind() !== 'essay'" hidden>Learners answer in their own words. You read each answer under Marking and give it points; the quiz result waits until you have.</p>
+
+      <fieldset class="mt-4" :hidden="kind() !== 'single' && kind() !== 'multiple' && kind() !== 'ordering'">
+        <legend class="font-medium text-ink text-sm">{{ kind() === 'ordering' ? 'Items' : 'Answers' }}</legend>
+        <p class="mt-1 text-muted text-sm">{{ kind() === 'ordering' ? 'Write them in the right order. Learners get them shuffled.' : (kind() === 'single' ? 'Mark the one that is correct.' : 'Mark every one that is correct. A learner must pick exactly those.') }}</p>
+        <ul class="flex flex-col gap-2 mt-3">
+          <li :for="(option, index) in options()" class="flex gap-2 items-center">
+            <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 border rounded-xl" :class="option.correct ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface text-muted'" :hidden="kind() === 'ordering'" :aria-pressed="option.correct" :aria-label="'Answer ' + (index + 1) + ' is correct'" @click="mark(index)"><span class="size-5 i-hugeicons-checkmark-circle-02" aria-hidden="true"></span></button>
+            <input type="text" class="flex-1 px-4 h-11 min-w-0 text-ink bg-surface border border-line rounded-xl" :aria-label="'Answer ' + (index + 1)" :value="option.label" @input="setLabel(index, $event.target.value)">
+            <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 text-muted hover:text-ink rounded-full" :aria-label="'Remove answer ' + (index + 1)" :disabled="options().length <= 2" @click="removeRow(index)"><span class="size-4 i-hugeicons-delete-02" aria-hidden="true"></span></button>
+          </li>
+        </ul>
+        <button type="button" class="inline-flex items-center mt-3 px-4 h-10 text-ink text-sm border border-line rounded-full" :hidden="options().length >= 12" @click="addRow()">Add an answer</button>
+      </fieldset>
+
+      <fieldset class="mt-4" :hidden="kind() !== 'matching'" hidden>
+        <legend class="font-medium text-ink text-sm">Pairs</legend>
+        <p class="mt-1 text-muted text-sm">Each item on the left and what it goes with. Learners get the right-hand side shuffled.</p>
+        <ul class="flex flex-col gap-2 mt-3">
+          <li :for="(pair, index) in pairs()" class="flex gap-2 items-center">
+            <input type="text" class="flex-1 px-4 h-11 min-w-0 text-ink bg-surface border border-line rounded-xl" :aria-label="'Item ' + (index + 1)" :value="pair.left" @input="setPair(index, 'left', $event.target.value)">
+            <span class="shrink-0 size-4 text-muted i-hugeicons-arrow-right-01" aria-hidden="true"></span>
+            <input type="text" class="flex-1 px-4 h-11 min-w-0 text-ink bg-surface border border-line rounded-xl" :aria-label="'Match for item ' + (index + 1)" :value="pair.right" @input="setPair(index, 'right', $event.target.value)">
+            <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 text-muted hover:text-ink rounded-full" :aria-label="'Remove pair ' + (index + 1)" :disabled="pairs().length <= 2" @click="removePair(index)"><span class="size-4 i-hugeicons-delete-02" aria-hidden="true"></span></button>
+          </li>
+        </ul>
+        <button type="button" class="inline-flex items-center mt-3 px-4 h-10 text-ink text-sm border border-line rounded-full" :hidden="pairs().length >= 12" @click="addPair()">Add a pair</button>
+      </fieldset>
+
+      <fieldset class="mt-4" :hidden="kind() !== 'true_false'" hidden>
+        <legend class="font-medium text-ink text-sm">The statement is</legend>
+        <div class="flex gap-2 mt-2">
+          <button type="button" class="inline-flex items-center px-5 h-11 text-sm border rounded-full" :class="truth() === 'true' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="truth() === 'true'" @click="truth.set('true')">True</button>
+          <button type="button" class="inline-flex items-center px-5 h-11 text-sm border rounded-full" :class="truth() === 'false' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="truth() === 'false'" @click="truth.set('false')">False</button>
+        </div>
+      </fieldset>
+
+      <div class="mt-4" :hidden="kind() !== 'text'" hidden>
+        <label for="question-answers" class="block font-medium text-ink text-sm">Accepted answers</label>
+        <textarea id="question-answers" x-model="typedAnswers" rows="3" aria-describedby="question-answers-help" class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
+        <p id="question-answers-help" class="mt-2 text-muted text-sm">One per line. Capital letters and extra spaces do not matter.</p>
+      </div>
+
+      <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 mt-4 max-w-md" :hidden="kind() !== 'number'" hidden>
+        <div>
+          <label for="question-value" class="block font-medium text-ink text-sm">Correct number</label>
+          <input id="question-value" x-model="numberValue" type="number" step="any" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        </div>
+        <div>
+          <label for="question-margin" class="block font-medium text-ink text-sm">Give or take</label>
+          <input id="question-margin" x-model="numberMargin" type="number" step="any" min="0" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        </div>
+      </div>
+
+      <div class="grid gap-4 grid-cols-1 md:grid-cols-4 mt-4">
+        <div class="md:col-span-3">
+          <label for="question-explanation" class="block font-medium text-ink text-sm">Explanation</label>
+          <input id="question-explanation" x-model="explanation" type="text" aria-describedby="question-explanation-help" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+          <p id="question-explanation-help" class="mt-2 text-muted text-sm">Shown with the result when the quiz reveals answers.</p>
+        </div>
+        <div>
+          <label for="question-points" class="block font-medium text-ink text-sm">Points</label>
+          <input id="question-points" x-model="points" type="number" min="1" max="100" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-3 mt-5">
+        <button type="submit" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">{{ editing() ? 'Save question' : 'Add question' }}</button>
+        <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-ink border border-line rounded-full" :hidden="editing() === 0" hidden @click="clearForm()">Cancel</button>
+      </div>
+    </form>
+
+    @if(!editorIsQuiz)
+    <form class="mt-8 p-6 bg-surface border border-line rounded-2xl" @submit.prevent="renameBank()">
+      <h2 class="font-semibold text-ink text-xl tracking-tight">This bank</h2>
+      <div class="mt-5 max-w-md">
+        <label for="bank-title" class="block font-medium text-ink text-sm">Name</label>
+        <input id="bank-title" x-model="bankTitle" type="text" required minlength="2" maxlength="120" class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl">
+      </div>
+      <div class="flex flex-wrap gap-3 items-center mt-5">
+        <button type="submit" class="inline-flex items-center px-5 h-11 font-medium text-ink border border-line rounded-full disabled:opacity-60" :disabled="busy()">Save name</button>
+        <button type="button" class="inline-flex items-center px-4 h-11 text-muted text-sm hover:text-ink rounded-full" :disabled="busy()" @click="deleteBank()">{{ pendingBankDelete() ? 'Really delete the bank and its questions?' : 'Delete this bank' }}</button>
+        <p class="text-muted text-sm" role="status" x-text="saved()"></p>
+      </div>
+    </form>
+    @else
+    <form class="mt-8 p-6 bg-surface border border-line rounded-2xl" @submit.prevent="saveSettings()">
+      <h2 class="font-semibold text-ink text-xl tracking-tight">How it is sat</h2>
+      <div class="grid gap-4 grid-cols-1 sm:grid-cols-3 mt-5">
+        <div>
+          <label for="quiz-pass" class="block font-medium text-ink text-sm">Pass mark (%)</label>
+          <input id="quiz-pass" x-model="passPercent" type="number" min="0" max="100" required class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl">
+        </div>
+        <div>
+          <label for="quiz-attempts" class="block font-medium text-ink text-sm">Attempts</label>
+          <input id="quiz-attempts" x-model="maxAttempts" type="number" min="1" max="100" aria-describedby="quiz-attempts-help" class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl">
+          <p id="quiz-attempts-help" class="mt-2 text-muted text-sm">Empty for no limit.</p>
+        </div>
+        <div>
+          <label for="quiz-minutes" class="block font-medium text-ink text-sm">Time limit (minutes)</label>
+          <input id="quiz-minutes" x-model="limitMinutes" type="number" min="1" max="1440" aria-describedby="quiz-minutes-help" class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl">
+          <p id="quiz-minutes-help" class="mt-2 text-muted text-sm">Empty for untimed.</p>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 mt-4">
+        <div>
+          <label for="quiz-reveal" class="block font-medium text-ink text-sm">Show the right answers</label>
+          <select id="quiz-reveal" x-model="reveal" class="mt-2 px-3 h-11 w-full text-ink bg-page border border-line rounded-xl">
+            <option value="after_submit">After every attempt</option>
+            <option value="after_pass">Only after passing</option>
+            <option value="never">Never</option>
+          </select>
+        </div>
+        <div>
+          <p class="font-medium text-ink text-sm">Question order</p>
+          <button type="button" class="inline-flex items-center mt-2 px-4 h-11 text-sm border rounded-full" :class="shuffle() ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="shuffle()" @click="shuffle.set(!shuffle())">{{ shuffle() ? 'Shuffled for each attempt' : 'As written' }}</button>
+        </div>
+      </div>
+      <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 mt-4" :hidden="banks().length === 0">
+        <div>
+          <label for="quiz-bank" class="block font-medium text-ink text-sm">Also draw from a bank</label>
+          <select id="quiz-bank" x-model="bankId" aria-describedby="quiz-bank-help" class="mt-2 px-3 h-11 w-full text-ink bg-page border border-line rounded-xl">
+            <option value="">No bank</option>
+            <option :for="bank in banks()" :value="String(bank.id)">{{ bank.title }} ({{ bank.questions }})</option>
+          </select>
+          <p id="quiz-bank-help" class="mt-2 text-muted text-sm">Each attempt gets the questions above plus a fresh handful from the bank.</p>
+        </div>
+        <div :hidden="bankId() === ''">
+          <label for="quiz-pool" class="block font-medium text-ink text-sm">Questions to draw</label>
+          <input id="quiz-pool" x-model="poolSize" type="number" min="1" max="100" class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl">
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-4 items-center mt-5">
+        <button type="submit" class="inline-flex items-center px-5 h-11 font-medium text-ink border border-line rounded-full disabled:opacity-60" :disabled="busy()">Save settings</button>
+        <p class="text-muted text-sm" role="status" x-text="saved()"></p>
+      </div>
+    </form>
+    @endif
+  </div>
+</div>
+</template>

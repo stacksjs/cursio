@@ -252,6 +252,33 @@ export function shuffled<T>(items: T[], seed: number): T[] {
   return result
 }
 
+/**
+ * A handful drawn from a bank: `count` of the pool, chosen by the seed. The
+ * same seed draws the same handful, so an Attempt reopened is the same paper;
+ * a different Attempt is, most likely, a different one.
+ */
+export function drawn<T>(pool: T[], count: number, seed: number): T[] {
+  if (!Number.isInteger(count) || count < 1)
+    return []
+  return shuffled(pool, seed).slice(0, count)
+}
+
+/** The ids an Attempt was told to ask, or null when it asks the Quiz's own. */
+export function parseQuestionIds(raw: string | null | undefined): number[] | null {
+  if (!raw)
+    return null
+  try {
+    const data: unknown = JSON.parse(raw)
+    if (!Array.isArray(data))
+      return null
+    const ids = data.map(Number).filter(id => Number.isInteger(id) && id > 0)
+    return ids.length > 0 ? [...new Set(ids)] : null
+  }
+  catch {
+    return null
+  }
+}
+
 export interface QuestionDraft {
   kind: string
   prompt: string

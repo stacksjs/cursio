@@ -3,6 +3,7 @@ import { response } from '@stacksjs/router'
 import { academiesForStaff } from '../../Support/academies'
 import { coursesInAcademy } from '../../Support/courses'
 import { userIdOf } from '../../Support/http'
+import { banksOf } from '../../Support/banks'
 
 export default new Action({
   name: 'StudioOverview',
@@ -20,8 +21,8 @@ export default new Action({
 
     // No academy yet is an ordinary state (a new account), not an error.
     if (!academy)
-      return response.json({ academy: null, academies: [], courses: [] })
+      return response.json({ academy: null, academies: [], courses: [], banks: [] })
 
-    return response.json({ academy, academies, courses: await coursesInAcademy(academy) })
+    return response.json({ academy, academies, courses: await coursesInAcademy(academy), banks: await banksOf(academy) })
   },
 })

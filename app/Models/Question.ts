@@ -2,7 +2,8 @@ import { defineModel } from '@stacksjs/orm'
 import { schema } from '@stacksjs/validation'
 
 /**
- * One question in a Quiz.
+ * One question, in a Quiz or in a QuestionBank (never both: a banked question
+ * reaches a Quiz by being drawn into an Attempt).
  *
  * Choice questions (`single`, `multiple`, `true_false`) keep their answers in
  * QuestionOption rows, and so does `ordering`, whose rows are stored in the
@@ -24,6 +25,7 @@ export default defineModel({
   belongsTo: [
     'Team',
     { model: 'Quiz', onDelete: 'cascade' },
+    { model: 'QuestionBank', onDelete: 'cascade' },
   ],
   hasMany: ['QuestionOption'],
 

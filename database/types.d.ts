@@ -1444,6 +1444,15 @@ declare module '@stacksjs/database' {
       explain_plan: string
       optimization_suggestions: string
     }
+    question_banks: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      title: string
+      team_id: number
+      academy_id: number
+    }
     question_options: {
       // columns
       id: number
@@ -1468,6 +1477,7 @@ declare module '@stacksjs/database' {
       accepted: string
       team_id: number
       quiz_id: number
+      question_bank_id: number
     }
     queue_circuit_state: {
       // columns
@@ -1495,6 +1505,7 @@ declare module '@stacksjs/database' {
       max_points: number
       percent: number
       passed: number
+      question_ids: string
       started_at: string
       submitted_at: string
       user_id: number
@@ -1507,6 +1518,7 @@ declare module '@stacksjs/database' {
       uuid: string
       created_at: string
       updated_at: string | null
+      pool_size: number
       pass_percent: number
       max_attempts: number
       time_limit_seconds: number
@@ -1515,6 +1527,7 @@ declare module '@stacksjs/database' {
       team_id: number
       course_id: number
       lesson_id: number
+      question_bank_id: number
     }
     receipts: {
       // columns

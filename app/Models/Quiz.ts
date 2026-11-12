@@ -25,6 +25,8 @@ export default defineModel({
     'Team',
     { model: 'Course', onDelete: 'cascade' },
     { model: 'Lesson', onDelete: 'cascade' },
+    // The bank this Quiz draws extra questions from, if any.
+    'QuestionBank',
   ],
   hasMany: ['Question', 'QuizAttempt'],
 
@@ -33,6 +35,16 @@ export default defineModel({
   ],
 
   attributes: {
+    /** How many questions each Attempt draws from the bank. */
+    poolSize: {
+      required: true,
+      default: 0,
+      order: 9,
+      fillable: true,
+      validation: { rule: schema.number().min(0).max(100) },
+      factory: () => 0,
+    },
+
     /** Whole percent of the points a Learner needs to pass. */
     passPercent: {
       required: true,

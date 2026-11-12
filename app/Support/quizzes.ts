@@ -9,7 +9,7 @@ import type { EnrollmentRow, LearnerProgress } from './enrollment'
 import type { AnswerKey, GradableQuestion, QuestionDraft, QuestionKind } from './grading'
 import { db } from '@stacksjs/database'
 import { completeLesson, enrollmentOf, progressOf, utc } from './enrollment'
-import { attemptsLeft, countsAsUsed, deadlineOf, ESSAY_MAX_LENGTH, essayPoints, gradeAttempt, isLate, manualKinds, optionKinds, parseAccepted, questionProblem, shuffled, tally } from './grading'
+import { attemptsLeft, countsAsUsed, deadlineOf, drawn, ESSAY_MAX_LENGTH, essayPoints, gradeAttempt, isLate, manualKinds, optionKinds, parseAccepted, parseQuestionIds, questionProblem, shuffled, tally } from './grading'
 import { isPermutation } from './progress'
 
 export class QuizError extends Error {}
@@ -24,9 +24,12 @@ export interface QuizRow {
   time_limit_seconds: number | null
   shuffle: boolean
   reveal: 'never' | 'after_submit' | 'after_pass'
+  /** The bank each Attempt draws `pool_size` extra questions from, if any. */
+  question_bank_id: number | null
+  pool_size: number
 }
 
-const quizColumns = ['id', 'lesson_id', 'course_id', 'team_id', 'pass_percent', 'max_attempts', 'time_limit_seconds', 'shuffle', 'reveal'] as const
+const quizColumns = ['id', 'lesson_id', 'course_id', 'team_id', 'pass_percent', 'max_attempts', 'time_limit_seconds', 'shuffle', 'reveal', 'question_bank_id', 'pool_size'] as const
 const reveals = ['never', 'after_submit', 'after_pass'] as const
 
 export interface StudioOption {
@@ -68,8 +71,17 @@ async function quizInCourse(course: CourseRow, lessonId: number): Promise<QuizRo
   return quiz
 }
 
-async function questionsOf(quizId: number): Promise<StudioQuestion[]> {
-  const rows = await db.selectFrom('questions').select(['id', 'kind', 'prompt', 'explanation', 'points', 'position', 'accepted']).where('quiz_id', '=', quizId).execute() as (Omit<StudioQuestion, 'options' | 'accepted'> & { accepted: string | null })[]
+type QuestionSource = { quizId: number } | { bankId: number } | { ids: number[] }
+
+/** Questions with their options and key: a Quiz's own, a bank's, or by id. */
+async function loadQuestions(source: QuestionSource): Promise<StudioQuestion[]> {
+  if ('ids' in source && source.ids.length === 0)
+    return []
+  const query = db.selectFrom('questions').select(['id', 'kind', 'prompt', 'explanation', 'points', 'position', 'accepted'])
+  const scoped = 'quizId' in source
+    ? query.where('quiz_id', '=', source.quizId)
+    : ('bankId' in source ? query.where('question_bank_id', '=', source.bankId) : query.where('id', 'in', source.ids))
+  const rows = await scoped.execute() as (Omit<StudioQuestion, 'options' | 'accepted'> & { accepted: string | null })[]
   if (rows.length === 0)
     return []
 
@@ -87,6 +99,15 @@ async function questionsOf(quizId: number): Promise<StudioQuestion[]> {
     }))
 }
 
+function questionsOf(quizId: number): Promise<StudioQuestion[]> {
+  return loadQuestions({ quizId })
+}
+
+/** A bank's questions, in the order they were written. */
+export function bankQuestions(bankId: number): Promise<StudioQuestion[]> {
+  return loadQuestions({ bankId })
+}
+
 export async function quizForStudio(course: CourseRow, lessonId: number): Promise<{ quiz: QuizRow, questions: StudioQuestion[] }> {
   const quiz = await quizInCourse(course, lessonId)
   return { quiz, questions: await questionsOf(quiz.id) }
@@ -102,7 +123,7 @@ function limit(value: unknown, min: number, max: number, message: string): numbe
   return number
 }
 
-export async function updateQuiz(course: CourseRow, lessonId: number, input: { passPercent?: number, maxAttempts?: number | null, timeLimitSeconds?: number | null, shuffle?: boolean, reveal?: string }): Promise<QuizRow> {
+export async function updateQuiz(course: CourseRow, lessonId: number, input: { passPercent?: number, maxAttempts?: number | null, timeLimitSeconds?: number | null, shuffle?: boolean, reveal?: string, questionBankId?: number | null, poolSize?: number }): Promise<QuizRow> {
   const quiz = await quizInCourse(course, lessonId)
   const next = { ...quiz }
 
@@ -123,7 +144,30 @@ export async function updateQuiz(course: CourseRow, lessonId: number, input: { p
     next.reveal = input.reveal as QuizRow['reveal']
   }
 
+  if (input.questionBankId !== undefined) {
+    if (input.questionBankId === null || Number(input.questionBankId) === 0) {
+      next.question_bank_id = null
+      next.pool_size = 0
+    }
+    else {
+      // A bank belongs to an Academy: a Quiz draws only from its own Academy's.
+      const bank = await db.selectFrom('question_banks').select(['id']).where('id', '=', Number(input.questionBankId)).where('academy_id', '=', course.academy_id).executeTakeFirst() as { id: number } | undefined
+      if (!bank)
+        throw new QuizError('That question bank is not in this academy.')
+      next.question_bank_id = bank.id
+    }
+  }
+  if (input.poolSize !== undefined && next.question_bank_id !== null) {
+    if (!Number.isInteger(input.poolSize) || input.poolSize < 1 || input.poolSize > 100)
+      throw new QuizError('Draw a whole number of questions from 1 to 100.')
+    next.pool_size = input.poolSize
+  }
+  if (next.question_bank_id !== null && next.pool_size < 1)
+    throw new QuizError('Say how many questions to draw from the bank.')
+
   await db.updateTable('quizzes').set({
+    question_bank_id: next.question_bank_id,
+    pool_size: next.pool_size,
     pass_percent: next.pass_percent,
     max_attempts: next.max_attempts,
     time_limit_seconds: next.time_limit_seconds,
@@ -152,6 +196,18 @@ function acceptedJson(draft: QuestionDraft): string | null {
  */
 export async function saveQuestion(course: CourseRow, lessonId: number, draft: QuestionDraft & { explanation?: string }, questionId = 0): Promise<StudioQuestion> {
   const quiz = await quizInCourse(course, lessonId)
+  return writeQuestion({ column: 'quiz_id', id: quiz.id, team_id: quiz.team_id }, draft, questionId)
+}
+
+/** Where a question lives: in a Quiz or in a bank. */
+export interface QuestionHome {
+  column: 'quiz_id' | 'question_bank_id'
+  id: number
+  team_id: number
+}
+
+export async function writeQuestion(home: QuestionHome, draft: QuestionDraft & { explanation?: string }, questionId = 0): Promise<StudioQuestion> {
+  const quiz = { id: home.id, team_id: home.team_id }
   const problem = questionProblem(draft)
   if (problem)
     throw new QuizError(problem)
@@ -166,16 +222,16 @@ export async function saveQuestion(course: CourseRow, lessonId: number, draft: Q
 
   let id = questionId
   if (id) {
-    const existing = await db.selectFrom('questions').select(['id']).where('id', '=', id).where('quiz_id', '=', quiz.id).executeTakeFirst()
+    const existing = await db.selectFrom('questions').select(['id']).where('id', '=', id).where(home.column, '=', quiz.id).executeTakeFirst()
     if (!existing)
-      throw new QuizError('That question is not part of this quiz.')
+      throw new QuizError(home.column === 'quiz_id' ? 'That question is not part of this quiz.' : 'That question is not in this bank.')
     await db.updateTable('questions').set({ ...fields, updated_at: now() }).where('id', '=', id).execute()
     await db.deleteFrom('question_options').where('question_id', '=', id).execute()
   }
   else {
-    const rows = await db.selectFrom('questions').select(['position']).where('quiz_id', '=', quiz.id).execute() as { position: number }[]
+    const rows = await db.selectFrom('questions').select(['position']).where(home.column, '=', quiz.id).execute() as { position: number }[]
     const position = rows.reduce((max, row) => Math.max(max, row.position + 1), 0)
-    const row = await db.insertInto('questions').values({ ...fields, team_id: quiz.team_id, quiz_id: quiz.id, position }).returning(['id']).executeTakeFirst() as { id: number }
+    const row = await db.insertInto('questions').values({ ...fields, team_id: quiz.team_id, [home.column]: quiz.id, position }).returning(['id']).executeTakeFirst() as { id: number }
     id = row.id
   }
 
@@ -185,7 +241,7 @@ export async function saveQuestion(course: CourseRow, lessonId: number, draft: Q
       await db.insertInto('question_options').values({ team_id: quiz.team_id, question_id: id, label: option.label.trim(), is_correct: draft.kind !== 'ordering' && Boolean(option.correct), position }).execute()
   }
 
-  const saved = (await questionsOf(quiz.id)).find(question => question.id === id)
+  const saved = (await loadQuestions({ ids: [id] }))[0]
   if (!saved)
     throw new QuizError('The question could not be saved.')
   return saved
@@ -197,9 +253,16 @@ export async function deleteQuestion(course: CourseRow, lessonId: number, questi
   if (!existing)
     throw new QuizError('That question is not part of this quiz.')
 
-  await db.deleteFrom('attempt_answers').where('question_id', '=', questionId).execute()
-  await db.deleteFrom('question_options').where('question_id', '=', questionId).execute()
-  await db.deleteFrom('questions').where('id', '=', questionId).execute()
+  await removeQuestions([questionId])
+}
+
+/** Delete questions with their options and whatever was answered to them. */
+export async function removeQuestions(ids: number[]): Promise<void> {
+  if (ids.length === 0)
+    return
+  await db.deleteFrom('attempt_answers').where('question_id', 'in', ids).execute()
+  await db.deleteFrom('question_options').where('question_id', 'in', ids).execute()
+  await db.deleteFrom('questions').where('id', 'in', ids).execute()
 }
 
 export async function reorderQuestions(course: CourseRow, lessonId: number, ids: number[]): Promise<void> {
@@ -228,9 +291,11 @@ export interface AttemptRow {
   passed: boolean
   started_at: string
   submitted_at: string | null
+  /** JSON list of the question ids this Attempt asks, when it drew from a bank. */
+  question_ids: string | null
 }
 
-const attemptColumns = ['id', 'quiz_id', 'user_id', 'enrollment_id', 'status', 'score_points', 'max_points', 'percent', 'passed', 'started_at', 'submitted_at'] as const
+const attemptColumns = ['id', 'quiz_id', 'user_id', 'enrollment_id', 'status', 'score_points', 'max_points', 'percent', 'passed', 'started_at', 'submitted_at', 'question_ids'] as const
 
 function attemptFrom(row: Record<string, unknown>): AttemptRow {
   return { ...(row as unknown as AttemptRow), passed: Boolean(row.passed) }
@@ -257,6 +322,28 @@ export async function reopenQuiz(course: CourseRow, lessonId: number, enrollment
   if (spent.length > 0)
     await db.updateTable('quiz_attempts').set({ status: 'voided', updated_at: now() }).where('id', 'in', spent.map(attempt => attempt.id)).execute()
   return spent.length
+}
+
+/**
+ * The questions one Attempt asks. A Quiz without a bank asks its own. One
+ * with a bank asks what this Attempt was dealt when it started: its own
+ * questions plus the handful drawn then, whatever the bank holds now. A dealt
+ * question that has since been deleted is simply gone from the paper.
+ */
+async function paperOf(quiz: QuizRow, attempt: AttemptRow): Promise<StudioQuestion[]> {
+  const dealt = parseQuestionIds(attempt.question_ids)
+  if (!dealt)
+    return questionsOf(quiz.id)
+  const found = await loadQuestions({ ids: dealt })
+  return dealt.flatMap(id => found.filter(question => question.id === id))
+}
+
+/** How many questions an Attempt at this Quiz will ask. */
+async function paperSize(quiz: QuizRow, own: StudioQuestion[]): Promise<number> {
+  if (!quiz.question_bank_id || quiz.pool_size < 1)
+    return own.length
+  const bank = await db.selectFrom('questions').select(['id']).where('question_bank_id', '=', quiz.question_bank_id).execute() as { id: number }[]
+  return own.length + Math.min(quiz.pool_size, bank.length)
 }
 
 /** A question as a Learner sees it before answering: no key, no flags. */
@@ -394,13 +481,16 @@ function openAttempt(attempt: AttemptRow, quiz: QuizRow, questions: StudioQuesti
 }
 
 /** Marked essay answers of these Attempts, by Attempt. */
-async function notesOf(attemptIds: number[], questions: StudioQuestion[]): Promise<Map<number, EssayNote[]>> {
+async function notesOf(attemptIds: number[]): Promise<Map<number, EssayNote[]>> {
   const result = new Map<number, EssayNote[]>()
-  const essays = questions.filter(question => manualKinds.includes(question.kind))
-  if (attemptIds.length === 0 || essays.length === 0)
+  if (attemptIds.length === 0)
     return result
 
-  const rows = await db.selectFrom('attempt_answers').select(['quiz_attempt_id', 'question_id', 'points_awarded', 'feedback']).where('quiz_attempt_id', 'in', attemptIds).where('question_id', 'in', essays.map(question => question.id)).where('graded_by', 'is not', null).execute() as { quiz_attempt_id: number, question_id: number, points_awarded: number, feedback: string | null }[]
+  const rows = await db.selectFrom('attempt_answers').select(['quiz_attempt_id', 'question_id', 'points_awarded', 'feedback']).where('quiz_attempt_id', 'in', attemptIds).where('graded_by', 'is not', null).execute() as { quiz_attempt_id: number, question_id: number, points_awarded: number, feedback: string | null }[]
+  if (rows.length === 0)
+    return result
+  // By id, not through the Quiz: an essay may have been drawn from a bank.
+  const essays = await db.selectFrom('questions').select(['id', 'prompt', 'points']).where('id', 'in', rows.map(row => row.question_id)).execute() as { id: number, prompt: string, points: number }[]
   for (const row of rows) {
     const question = essays.find(item => item.id === row.question_id)
     if (!question)
@@ -412,29 +502,51 @@ async function notesOf(attemptIds: number[], questions: StudioQuestion[]): Promi
   return result
 }
 
-function describe(quiz: QuizRow, questions: StudioQuestion[], attempts: AttemptRow[], notes: Map<number, EssayNote[]> = new Map()): LearnerQuiz {
+interface Described {
+  /** The Quiz's own questions. */
+  own: StudioQuestion[]
+  /** How many an Attempt asks, counting what it draws from a bank. */
+  size: number
+  /** The paper of the Attempt in progress, when there is one. */
+  paper?: StudioQuestion[]
+  notes?: Map<number, EssayNote[]>
+}
+
+function describe(quiz: QuizRow, facts: Described, attempts: AttemptRow[]): LearnerQuiz {
   const closed = attempts.filter(attempt => attempt.status !== 'open')
   const open = attempts.find(attempt => attempt.status === 'open')
+  const questions = facts.own
+  const notes = facts.notes ?? new Map<number, EssayNote[]>()
 
   return {
     passPercent: quiz.pass_percent,
     maxAttempts: quiz.max_attempts,
     timeLimitSeconds: quiz.time_limit_seconds,
-    questionCount: questions.length,
+    questionCount: facts.size,
     totalPoints: questions.reduce((sum, question) => sum + question.points, 0),
     attempts: closed.map(attempt => ({ id: attempt.id, status: attempt.status, percent: attempt.percent, passed: attempt.passed, submittedAt: attempt.submitted_at, notes: notes.get(attempt.id) ?? [] })),
     attemptsLeft: attemptsLeft(quiz.max_attempts, attempts.length),
     passed: closed.some(attempt => attempt.passed),
     waiting: closed.some(attempt => attempt.status === 'review'),
-    open: open ? openAttempt(open, quiz, questions) : null,
+    open: open ? openAttempt(open, quiz, facts.paper ?? questions) : null,
+  }
+}
+
+async function describedFor(quiz: QuizRow, attempts: AttemptRow[], withNotes = false): Promise<Described> {
+  const own = await questionsOf(quiz.id)
+  const open = attempts.find(attempt => attempt.status === 'open')
+  return {
+    own,
+    size: await paperSize(quiz, own),
+    paper: open ? await paperOf(quiz, open) : undefined,
+    notes: withNotes ? await notesOf(attempts.map(attempt => attempt.id)) : undefined,
   }
 }
 
 export async function quizForLearner(userId: number, lessonId: number, at: Date = new Date()): Promise<LearnerQuiz> {
   const { quiz, enrollment } = await sittingOf(userId, lessonId, at)
   const attempts = await expireStale(quiz, await attemptsOf(quiz.id, enrollment.id), at)
-  const questions = await questionsOf(quiz.id)
-  return describe(quiz, questions, attempts, await notesOf(attempts.map(attempt => attempt.id), questions))
+  return describe(quiz, await describedFor(quiz, attempts, true), attempts)
 }
 
 /**
@@ -444,13 +556,14 @@ export async function quizForLearner(userId: number, lessonId: number, at: Date 
 export async function startAttempt(userId: number, lessonId: number, at: Date = new Date()): Promise<OpenAttempt> {
   const { quiz, enrollment } = await sittingOf(userId, lessonId, at)
   const questions = await questionsOf(quiz.id)
-  if (questions.length === 0)
+  const pool = quiz.question_bank_id && quiz.pool_size > 0 ? await bankQuestions(quiz.question_bank_id) : []
+  if (questions.length + pool.length === 0)
     throw new QuizError('This quiz has no questions yet.')
 
   const attempts = await expireStale(quiz, await attemptsOf(quiz.id, enrollment.id), at)
   const open = attempts.find(attempt => attempt.status === 'open')
   if (open)
-    return openAttempt(open, quiz, questions)
+    return openAttempt(open, quiz, await paperOf(quiz, open))
 
   if (attempts.some(attempt => attempt.status === 'review'))
     throw new QuizError('Your last attempt is waiting for a mark.')
@@ -466,10 +579,17 @@ export async function startAttempt(userId: number, lessonId: number, at: Date = 
     uuid: crypto.randomUUID(),
   }).returning(['id']).executeTakeFirst() as { id: number }
 
+  // Deal this Attempt its paper. The Attempt's own id is the seed, so two
+  // Attempts draw differently and one Attempt always reads the same.
+  if (pool.length > 0) {
+    const dealt = [...questions, ...drawn(pool, quiz.pool_size, row.id)].map(question => question.id)
+    await db.updateTable('quiz_attempts').set({ question_ids: JSON.stringify(dealt) }).where('id', '=', row.id).execute()
+  }
+
   const created = (await attemptsOf(quiz.id, enrollment.id)).find(attempt => attempt.id === row.id)
   if (!created)
     throw new QuizError('The attempt could not be started.')
-  return openAttempt(created, quiz, questions)
+  return openAttempt(created, quiz, await paperOf(quiz, created))
 }
 
 export interface ReviewedQuestion {
@@ -528,7 +648,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
     throw new QuizError('Time ran out on this attempt.')
   }
 
-  const questions = await questionsOf(quiz.id)
+  const questions = await paperOf(quiz, attempt)
   // An essay is kept whole or cut at a fixed length, never cut mid-JSON.
   for (const question of questions) {
     const response = responses[question.id]
@@ -587,7 +707,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
         ? { id: answer.questionId, correct: answer.correct, points: answer.points, correctOptionIds: (question.kind === 'ordering' ? question.options : question.options.filter(option => option.is_correct)).map(option => option.id), accepted: question.accepted, explanation: question.explanation }
         : { id: answer.questionId, correct: answer.correct, points: answer.points }
     }),
-    quiz: describe(quiz, questions, attempts),
+    quiz: describe(quiz, await describedFor(quiz, attempts), attempts),
     progress: await progressOf(enrollment, at),
     courseCompleted,
   }

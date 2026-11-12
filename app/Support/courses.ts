@@ -327,6 +327,7 @@ export async function deleteLesson(course: CourseRow, lessonId: number): Promise
   await lessonOf(course, lessonId)
   await deleteQuizzesOf([lessonId])
   await deleteAssignmentsOf([lessonId])
+  await db.deleteFrom('commentables').where('commentables_type', '=', 'Lesson').where('commentables_id', '=', lessonId).execute()
   await db.deleteFrom('lesson_progress').where('lesson_id', '=', lessonId).execute()
   await db.deleteFrom('lessons').where('id', '=', lessonId).execute()
 }
@@ -372,6 +373,7 @@ export async function deleteSection(course: CourseRow, sectionId: number): Promi
   if (lessons.length > 0) {
     await deleteQuizzesOf(lessons.map(row => row.id))
     await deleteAssignmentsOf(lessons.map(row => row.id))
+    await db.deleteFrom('commentables').where('commentables_type', '=', 'Lesson').where('commentables_id', 'in', lessons.map(row => row.id)).execute()
     await db.deleteFrom('lesson_progress').where('lesson_id', 'in', lessons.map(row => row.id)).execute()
     await db.deleteFrom('lessons').where('course_section_id', '=', sectionId).execute()
   }

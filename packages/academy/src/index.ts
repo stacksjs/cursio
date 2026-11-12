@@ -187,6 +187,9 @@ export const forwarded: readonly (readonly [method: 'GET' | 'POST', path: string
   ['GET', '/learn/lessons/{id}/quiz', '/api/learn/lessons/{id}/quiz'],
   ['POST', '/learn/lessons/{id}/quiz/attempts', '/api/learn/lessons/{id}/quiz/attempts'],
   ['POST', '/learn/attempts/{id}/submit', '/api/learn/attempts/{id}/submit'],
+  ['GET', '/learn/lessons/{id}/comments', '/api/learn/lessons/{id}/comments'],
+  ['POST', '/learn/lessons/{id}/comments', '/api/learn/lessons/{id}/comments'],
+  ['POST', '/learn/comments/{id}/remove', '/api/learn/comments/{id}/remove'],
   ['GET', '/learn/lessons/{id}/assignment', '/api/learn/lessons/{id}/assignment'],
   ['POST', '/learn/lessons/{id}/assignment/submit', '/api/learn/lessons/{id}/assignment/submit'],
 ]

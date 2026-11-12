@@ -18,5 +18,8 @@ route.post('/lessons/{id}/complete', 'Actions/Learn/CompleteLessonAction').middl
 route.get('/lessons/{id}/quiz', 'Actions/Learn/QuizShowAction').middleware('auth')
 route.post('/lessons/{id}/quiz/attempts', 'Actions/Learn/StartAttemptAction').middleware('auth')
 route.post('/attempts/{id}/submit', 'Actions/Learn/SubmitAttemptAction').middleware('auth')
+route.get('/lessons/{id}/comments', 'Actions/Learn/CommentsAction').middleware('auth')
+route.post('/lessons/{id}/comments', 'Actions/Learn/AddCommentAction').middleware('auth')
+route.post('/comments/{id}/remove', 'Actions/Learn/RemoveCommentAction').middleware('auth')
 route.get('/lessons/{id}/assignment', 'Actions/Learn/AssignmentShowAction').middleware('auth')
 route.post('/lessons/{id}/assignment/submit', 'Actions/Learn/SubmitWorkAction').middleware('auth')

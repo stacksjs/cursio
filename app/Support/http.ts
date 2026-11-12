@@ -13,6 +13,7 @@ import { EnrollmentError } from './enrollment'
 import { QuizError } from './quizzes'
 import { AssignmentError } from './assignments'
 import type { BankRow } from './banks'
+import { CommentError } from './comments'
 import type { QuestionDraft } from './grading'
 
 /** The signed-in user's id, or null. Never read from the request body. */
@@ -41,7 +42,7 @@ export async function staffContext(request: RequestInstance): Promise<{ userId: 
 
 /** A rule the domain refused is the caller's to fix: 422 with its message. */
 export function refusal(error: unknown): Response {
-  if (error instanceof AcademyError || error instanceof CourseError || error instanceof EnrollmentError || error instanceof QuizError || error instanceof AssignmentError)
+  if (error instanceof AcademyError || error instanceof CourseError || error instanceof EnrollmentError || error instanceof QuizError || error instanceof AssignmentError || error instanceof CommentError)
     return response.json({ success: false, message: error.message }, 422)
 
   throw error

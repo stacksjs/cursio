@@ -5,8 +5,10 @@
 // resolves. Values are paths rather than import thunks on purpose: thunks
 // would make every compilation that touches a name resolve every module.
 export const actions = {
+  'Actions/Learn/AddCommentAction': '../../../app/Actions/Learn/AddCommentAction.ts',
   'Actions/Learn/AssignmentShowAction': '../../../app/Actions/Learn/AssignmentShowAction.ts',
   'Actions/Learn/CatalogAction': '../../../app/Actions/Learn/CatalogAction.ts',
+  'Actions/Learn/CommentsAction': '../../../app/Actions/Learn/CommentsAction.ts',
   'Actions/Learn/CompleteLessonAction': '../../../app/Actions/Learn/CompleteLessonAction.ts',
   'Actions/Learn/CourseProgressAction': '../../../app/Actions/Learn/CourseProgressAction.ts',
   'Actions/Learn/CourseShowAction': '../../../app/Actions/Learn/CourseShowAction.ts',
@@ -15,6 +17,7 @@ export const actions = {
   'Actions/Learn/LessonShowAction': '../../../app/Actions/Learn/LessonShowAction.ts',
   'Actions/Learn/LibraryAction': '../../../app/Actions/Learn/LibraryAction.ts',
   'Actions/Learn/QuizShowAction': '../../../app/Actions/Learn/QuizShowAction.ts',
+  'Actions/Learn/RemoveCommentAction': '../../../app/Actions/Learn/RemoveCommentAction.ts',
   'Actions/Learn/SavePositionAction': '../../../app/Actions/Learn/SavePositionAction.ts',
   'Actions/Learn/SearchAction': '../../../app/Actions/Learn/SearchAction.ts',
   'Actions/Learn/StartAttemptAction': '../../../app/Actions/Learn/StartAttemptAction.ts',

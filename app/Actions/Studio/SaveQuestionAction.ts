@@ -16,6 +16,7 @@ export default new Action({
     const options = request.get('options')
     const answers = request.get('answers')
     const value = request.get('value')
+    const pairs = request.get('pairs')
 
     try {
       const questionId = idParam(request, 'question')
@@ -30,6 +31,7 @@ export default new Action({
         answers: Array.isArray(answers) ? answers.map(String) : [],
         value: value === undefined || value === null || value === '' ? null : Number(value),
         tolerance: Number(request.get('tolerance')) || 0,
+        pairs: Array.isArray(pairs) ? pairs.map(pair => ({ left: String(pair?.left ?? ''), right: String(pair?.right ?? '') })) : [],
       }, questionId)
       return response.json({ success: true, question }, questionId ? 200 : 201)
     }

@@ -7,14 +7,23 @@
  * so the rules can be tested exhaustively and read in one place.
  */
 
-export const questionKinds = ['single', 'multiple', 'true_false', 'text', 'number'] as const
+export const questionKinds = ['single', 'multiple', 'true_false', 'text', 'number', 'ordering', 'matching'] as const
 export type QuestionKind = typeof questionKinds[number]
 
 export const choiceKinds: readonly QuestionKind[] = ['single', 'multiple', 'true_false']
 
+/** Kinds whose answers are stored as option rows. For `ordering` the rows are in the right order. */
+export const optionKinds: readonly QuestionKind[] = [...choiceKinds, 'ordering']
+
+export interface MatchPair {
+  left: string
+  right: string
+}
+
 export type AnswerKey
   = | { answers: string[] }
     | { value: number, tolerance: number }
+    | { pairs: MatchPair[] }
 
 export interface GradableOption {
   id: number
@@ -36,7 +45,7 @@ export function normalizeText(text: string): string {
 
 /** The stored answer key, or null when it is missing or not for this kind. */
 export function parseAccepted(kind: QuestionKind, raw: string | null | undefined): AnswerKey | null {
-  if (!raw || (kind !== 'text' && kind !== 'number'))
+  if (!raw || (kind !== 'text' && kind !== 'number' && kind !== 'matching'))
     return null
 
   let data: unknown
@@ -49,7 +58,13 @@ export function parseAccepted(kind: QuestionKind, raw: string | null | undefined
   if (typeof data !== 'object' || data === null)
     return null
 
-  const key = data as { answers?: unknown, value?: unknown, tolerance?: unknown }
+  const key = data as { answers?: unknown, value?: unknown, tolerance?: unknown, pairs?: unknown }
+  if (kind === 'matching') {
+    const pairs = Array.isArray(key.pairs)
+      ? key.pairs.filter((pair): pair is MatchPair => typeof pair?.left === 'string' && typeof pair?.right === 'string' && normalizeText(pair.left) !== '' && normalizeText(pair.right) !== '')
+      : []
+    return pairs.length >= 2 ? { pairs: pairs.map(pair => ({ left: pair.left, right: pair.right })) } : null
+  }
   if (kind === 'text') {
     const answers = Array.isArray(key.answers) ? key.answers.filter((item): item is string => typeof item === 'string' && normalizeText(item) !== '') : []
     return answers.length > 0 ? { answers } : null
@@ -92,6 +107,24 @@ export function isCorrect(question: GradableQuestion, response: unknown): boolea
       return false
     // A hair of slack so 0.1 + 0.2 still equals 0.3 at zero tolerance.
     return Math.abs(given - question.accepted.value) <= question.accepted.tolerance + 1e-9
+  }
+
+  if (question.kind === 'matching') {
+    if (!question.accepted || !('pairs' in question.accepted) || typeof response !== 'object' || Array.isArray(response))
+      return false
+    // Keyed by the position of the left-hand item; the value is the right-hand
+    // text the Learner put against it.
+    const given = response as Record<string, unknown>
+    return question.accepted.pairs.every((pair, index) => typeof given[index] === 'string' && normalizeText(given[index] as string) === normalizeText(pair.right))
+  }
+
+  if (question.kind === 'ordering') {
+    // The options are stored in the right order: the response must list every
+    // one of them, in that order.
+    if (!Array.isArray(response))
+      return false
+    const order = response.map(Number)
+    return order.length === question.options.length && question.options.length > 1 && question.options.every((option, index) => order[index] === option.id)
   }
 
   const right = question.options.filter(option => option.is_correct).map(option => option.id)
@@ -187,6 +220,7 @@ export interface QuestionDraft {
   answers?: string[]
   value?: number | null
   tolerance?: number | null
+  pairs?: MatchPair[]
 }
 
 /**
@@ -213,7 +247,29 @@ export function questionProblem(draft: QuestionDraft): string | null {
     return Number(draft.tolerance ?? 0) >= 0 ? null : 'The margin cannot be negative.'
   }
 
+  if (kind === 'matching') {
+    const pairs = (draft.pairs ?? []).filter(pair => pair.left.trim() !== '' || pair.right.trim() !== '')
+    if (pairs.some(pair => pair.left.trim() === '' || pair.right.trim() === ''))
+      return 'Every pair needs both of its sides.'
+    if (pairs.length < 2)
+      return 'Give at least two pairs to match.'
+    if (pairs.length > 12)
+      return 'A question can have at most twelve pairs.'
+    // Two identical right-hand sides would make the question ambiguous only in
+    // appearance (either fits), but two identical left-hand sides cannot be told apart.
+    if (new Set(pairs.map(pair => normalizeText(pair.left))).size !== pairs.length)
+      return 'Two items to match read the same.'
+    return null
+  }
+
   const options = (draft.options ?? []).filter(option => option.label.trim() !== '')
+  if (kind === 'ordering') {
+    if (options.length < 2)
+      return 'Give at least two items to put in order.'
+    if (options.length > 12)
+      return 'A question can have at most twelve items.'
+    return new Set(options.map(option => normalizeText(option.label))).size === options.length ? null : 'Two items read the same.'
+  }
   const right = options.filter(option => option.correct).length
   if (kind === 'true_false')
     return options.length === 2 && right === 1 ? null : 'Pick whether the statement is true or false.'

@@ -5,7 +5,8 @@ import { schema } from '@stacksjs/validation'
  * One question in a Quiz.
  *
  * Choice questions (`single`, `multiple`, `true_false`) keep their answers in
- * QuestionOption rows. `text` and `number` have no options: what counts as
+ * QuestionOption rows, and so does `ordering`, whose rows are stored in the
+ * right order. `matching` keeps its pairs in `accepted` (`{"pairs":[...]}`). `text` and `number` have no options: what counts as
  * right is in `accepted`, a JSON document the grader reads
  * (`{"answers":["paris"]}` or `{"value":9.81,"tolerance":0.01}`).
  */
@@ -32,7 +33,7 @@ export default defineModel({
       default: 'single',
       order: 1,
       fillable: true,
-      validation: { rule: schema.enum(['single', 'multiple', 'true_false', 'text', 'number']) },
+      validation: { rule: schema.enum(['single', 'multiple', 'true_false', 'text', 'number', 'ordering', 'matching']) },
       factory: () => 'single',
     },
 

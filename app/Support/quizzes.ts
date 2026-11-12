@@ -9,7 +9,7 @@ import type { EnrollmentRow, LearnerProgress } from './enrollment'
 import type { AnswerKey, GradableQuestion, QuestionDraft, QuestionKind } from './grading'
 import { db } from '@stacksjs/database'
 import { completeLesson, enrollmentOf, progressOf, utc } from './enrollment'
-import { attemptsLeft, choiceKinds, countsAsUsed, deadlineOf, gradeAttempt, isLate, parseAccepted, questionProblem, shuffled } from './grading'
+import { attemptsLeft, countsAsUsed, deadlineOf, gradeAttempt, isLate, optionKinds, parseAccepted, questionProblem, shuffled } from './grading'
 import { isPermutation } from './progress'
 
 export class QuizError extends Error {}
@@ -140,6 +140,8 @@ function acceptedJson(draft: QuestionDraft): string | null {
     return JSON.stringify({ answers: (draft.answers ?? []).map(answer => answer.trim()).filter(Boolean) })
   if (draft.kind === 'number')
     return JSON.stringify({ value: Number(draft.value), tolerance: Math.abs(Number(draft.tolerance) || 0) })
+  if (draft.kind === 'matching')
+    return JSON.stringify({ pairs: (draft.pairs ?? []).filter(pair => pair.left.trim() !== '').map(pair => ({ left: pair.left.trim(), right: pair.right.trim() })) })
   return null
 }
 
@@ -177,10 +179,10 @@ export async function saveQuestion(course: CourseRow, lessonId: number, draft: Q
     id = row.id
   }
 
-  if (choiceKinds.includes(draft.kind as QuestionKind)) {
+  if (optionKinds.includes(draft.kind as QuestionKind)) {
     const options = (draft.options ?? []).filter(option => option.label.trim() !== '')
     for (const [position, option] of options.entries())
-      await db.insertInto('question_options').values({ team_id: quiz.team_id, question_id: id, label: option.label.trim(), is_correct: Boolean(option.correct), position }).execute()
+      await db.insertInto('question_options').values({ team_id: quiz.team_id, question_id: id, label: option.label.trim(), is_correct: draft.kind !== 'ordering' && Boolean(option.correct), position }).execute()
   }
 
   const saved = (await questionsOf(quiz.id)).find(question => question.id === id)
@@ -264,20 +266,44 @@ export interface AskedQuestion {
   prompt: string
   points: number
   options: { id: number, label: string }[]
+  /** `matching` only: the items to match, in order, and what they can be matched to, shuffled. */
+  lefts?: string[]
+  rights?: string[]
+}
+
+/**
+ * A shuffle that never hands the items back in the order they came in (when
+ * there is more than one): an ordering question shown already in order would
+ * answer itself.
+ */
+function scrambled<T>(items: T[], seed: number): T[] {
+  for (let turn = 0; turn < 8; turn++) {
+    const result = shuffled(items, seed + turn * 7919)
+    if (items.length < 2 || result.some((item, index) => item !== items[index]))
+      return result
+  }
+  return [...items].reverse()
 }
 
 function asked(questions: StudioQuestion[], quiz: QuizRow, attemptId: number): AskedQuestion[] {
   const ordered = quiz.shuffle ? shuffled(questions, attemptId) : questions
-  return ordered.map(question => ({
-    id: question.id,
-    kind: question.kind,
-    prompt: question.prompt,
-    points: question.points,
-    // Options are shuffled with the questions, except true/false, which reads
-    // oddly as "False, True".
-    options: (quiz.shuffle && question.kind !== 'true_false' ? shuffled(question.options, attemptId + question.id) : question.options)
-      .map(option => ({ id: option.id, label: option.label })),
-  }))
+  return ordered.map((question) => {
+    const seed = attemptId + question.id
+    const base = { id: question.id, kind: question.kind, prompt: question.prompt, points: question.points }
+
+    if (question.kind === 'matching') {
+      const pairs = question.accepted && 'pairs' in question.accepted ? question.accepted.pairs : []
+      return { ...base, options: [], lefts: pairs.map(pair => pair.left), rights: scrambled(pairs.map(pair => pair.right), seed) }
+    }
+
+    // Ordering is always scrambled: its stored order is the answer. Choices
+    // are shuffled with the questions, except true/false, which reads oddly
+    // as "False, True".
+    const options = question.kind === 'ordering'
+      ? scrambled(question.options, seed)
+      : (quiz.shuffle && question.kind !== 'true_false' ? shuffled(question.options, seed) : question.options)
+    return { ...base, options: options.map(option => ({ id: option.id, label: option.label })) }
+  })
 }
 
 interface Sitting {
@@ -512,7 +538,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
     questions: graded.answers.map((answer) => {
       const question = questions.find(item => item.id === answer.questionId) as StudioQuestion
       return revealed
-        ? { id: answer.questionId, correct: answer.correct, points: answer.points, correctOptionIds: question.options.filter(option => option.is_correct).map(option => option.id), accepted: question.accepted, explanation: question.explanation }
+        ? { id: answer.questionId, correct: answer.correct, points: answer.points, correctOptionIds: (question.kind === 'ordering' ? question.options : question.options.filter(option => option.is_correct)).map(option => option.id), accepted: question.accepted, explanation: question.explanation }
         : { id: answer.questionId, correct: answer.correct, points: answer.points }
     }),
     quiz: describe(quiz, questions, attempts),

@@ -14874,7 +14874,9 @@
               "multiple",
               "true_false",
               "text",
-              "number"
+              "number",
+              "ordering",
+              "matching"
             ]
           },
           {
@@ -15342,7 +15344,7 @@
       }
     ]
   },
-  "hash": "1ce7afb6e90b45a5b7a7b07f9ef91e3b8f7a0205ca958ca179ae972c33ff08e2",
+  "hash": "82c6f7348ed812f1b3de0e9f688671ad077140ad04b3a95d811a03b7b33ef1bb",
   "dialect": "sqlite",
-  "updatedAt": "2026-11-12T01:51:28.357Z"
+  "updatedAt": "2026-11-12T03:45:55.790Z"
 }

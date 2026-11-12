@@ -20,9 +20,13 @@ const attempt = state(null)
 const result = state(null)
 const reviewed = state([])
 const picks = state({})
+// The Learner's arrangement of each ordering question: question id to option ids.
+const orders = state({})
 const remaining = state(-1)
 // Typed answers are kept out of a signal so a keystroke redraws nothing.
 let typed = {}
+// Matching answers: question id to { position of the left item: chosen text }.
+let matches = {}
 let ticking = 0
 
 const percent = derived(() => total === 0 ? 0 : Math.round((doneIds().length / total) * 100))
@@ -132,7 +136,9 @@ function stopClock() {
 
 function begin(opened) {
   typed = {}
+  matches = {}
   picks.set({})
+  orders.set(Object.fromEntries(opened.questions.filter(question => question.kind === 'ordering').map(question => [question.id, question.options.map(option => option.id)])))
   result.set(null)
   attempt.set(opened)
   stopClock()
@@ -189,6 +195,26 @@ function type(questionId, value) {
   typed[questionId] = value
 }
 
+function match(questionId, index, value) {
+  matches[questionId] = { ...(matches[questionId] || {}), [index]: value }
+}
+
+/** An ordering question's items in the order the Learner has them now. */
+function arranged(question) {
+  const order = orders()[question.id] || []
+  return order.map(id => question.options.find(option => option.id === id)).filter(Boolean)
+}
+
+function shift(questionId, optionId, step) {
+  const order = [...(orders()[questionId] || [])]
+  const from = order.indexOf(optionId)
+  const to = from + step
+  if (from < 0 || to < 0 || to >= order.length)
+    return
+  order.splice(to, 0, order.splice(from, 1)[0])
+  orders.set({ ...orders(), [questionId]: order })
+}
+
 async function submitQuiz() {
   const sitting = attempt()
   if (!sitting)
@@ -199,6 +225,10 @@ async function submitQuiz() {
   for (const question of sitting.questions) {
     if (question.kind === 'text' || question.kind === 'number')
       answers[question.id] = typed[question.id] ?? ''
+    else if (question.kind === 'ordering')
+      answers[question.id] = orders()[question.id] || []
+    else if (question.kind === 'matching')
+      answers[question.id] = matches[question.id] || {}
     else
       answers[question.id] = picks()[question.id] || []
   }
@@ -235,6 +265,10 @@ function rightAnswer(question, review) {
     return review.accepted?.answers?.[0] || ''
   if (question.kind === 'number')
     return String(review.accepted?.value ?? '')
+  if (question.kind === 'matching')
+    return (review.accepted?.pairs || []).map(pair => `${pair.left} with ${pair.right}`).join(', ')
+  if (question.kind === 'ordering')
+    return review.correctOptionIds.map(id => question.options.find(option => option.id === id)?.label).join(', then ')
   return question.options.filter(option => review.correctOptionIds.includes(option.id)).map(option => option.label).join(', ')
 }
 
@@ -348,7 +382,25 @@ onMount(load)
               <li :for="(question, index) in attempt()?.questions || []">
                 <p class="font-medium text-ink"><span class="tabular-nums text-muted">{{ index + 1 }}.</span> {{ question.prompt }}</p>
                 <p class="mt-1 text-muted text-xs" :hidden="question.kind !== 'multiple'">Pick every answer that applies.</p>
-                <div class="flex flex-col gap-2 mt-3" :hidden="question.options.length === 0">
+                <p class="mt-1 text-muted text-xs" :hidden="question.kind !== 'ordering'">Put these in order with the arrows.</p>
+                <ol class="flex flex-col gap-2 mt-3" :hidden="question.kind !== 'ordering'">
+                  <li :for="(option, place) in arranged(question)" class="flex gap-2 items-center px-4 py-2 text-sm border border-line rounded-xl">
+                    <span class="w-5 tabular-nums text-muted">{{ place + 1 }}</span>
+                    <span class="flex-1 text-ink">{{ option.label }}</span>
+                    <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full disabled:opacity-40" :aria-label="'Move ' + option.label + ' up'" :disabled="place === 0" @click="shift(question.id, option.id, -1)"><span class="size-4 i-hugeicons-arrow-up-01" aria-hidden="true"></span></button>
+                    <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full disabled:opacity-40" :aria-label="'Move ' + option.label + ' down'" :disabled="place === arranged(question).length - 1" @click="shift(question.id, option.id, 1)"><span class="size-4 i-hugeicons-arrow-down-01" aria-hidden="true"></span></button>
+                  </li>
+                </ol>
+                <ul class="flex flex-col gap-2 mt-3" :hidden="question.kind !== 'matching'">
+                  <li :for="(left, place) in question.lefts || []" class="grid gap-2 grid-cols-1 sm:grid-cols-2 sm:items-center">
+                    <span class="text-ink text-sm">{{ left }}</span>
+                    <select class="px-3 h-11 w-full text-ink bg-page border border-line rounded-xl" :aria-label="'Match for ' + left" @change="match(question.id, place, $event.target.value)">
+                      <option value="">Choose</option>
+                      <option :for="right in question.rights || []" :value="right">{{ right }}</option>
+                    </select>
+                  </li>
+                </ul>
+                <div class="flex flex-col gap-2 mt-3" :hidden="question.options.length === 0 || question.kind === 'ordering'">
                   <button :for="option in question.options" type="button" class="flex gap-3 items-center px-4 py-3 w-full text-left text-sm border rounded-xl transition-colors" :class="isPicked(question.id, option.id) ? 'border-accent bg-accent-soft text-ink' : 'border-line text-ink hover:bg-tint'" :aria-pressed="isPicked(question.id, option.id)" @click="pick(question.id, question.kind, option.id)">
                     <span class="shrink-0 size-5" :class="isPicked(question.id, option.id) ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-circle text-muted'" aria-hidden="true"></span>
                     <span>{{ option.label }}</span>

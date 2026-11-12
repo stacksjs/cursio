@@ -1439,7 +1439,7 @@ declare module '@stacksjs/database' {
       id: number
       created_at: string
       updated_at: string | null
-      kind: "single" | "multiple" | "true_false" | "text" | "number"
+      kind: "single" | "multiple" | "true_false" | "text" | "number" | "ordering" | "matching"
       prompt: string
       explanation: string
       points: number

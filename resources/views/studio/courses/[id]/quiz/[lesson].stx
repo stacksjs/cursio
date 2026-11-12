@@ -11,7 +11,7 @@ import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-a
 const courseHome = `/studio/courses/{{ courseId }}`
 const base = `/api/studio/courses/{{ courseId }}/lessons/{{ lessonId }}/quiz`
 
-const kindLabels = { single: 'One answer', multiple: 'Several answers', true_false: 'True or false', text: 'Typed answer', number: 'Number' }
+const kindLabels = { single: 'One answer', multiple: 'Several answers', true_false: 'True or false', text: 'Typed answer', number: 'Number', ordering: 'Put in order', matching: 'Match pairs' }
 
 const loading = state(true)
 const loaded = state(false)
@@ -41,6 +41,9 @@ const numberMargin = state('')
 // it only when a row is added, removed or marked.
 let rows = []
 const options = state([])
+// The same arrangement for the pairs of a matching question.
+let pairRows = []
+const pairs = state([])
 
 const totalPoints = derived(() => questions().reduce((sum, question) => sum + question.points, 0))
 
@@ -51,11 +54,40 @@ function drawOptions() {
 function blankRows() {
   rows = [{ label: '', correct: true }, { label: '', correct: false }, { label: '', correct: false }]
   drawOptions()
+  pairRows = [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }]
+  drawPairs()
+}
+
+function drawPairs() {
+  pairs.set(pairRows.map(row => ({ ...row })))
+}
+
+function setPair(index, side, value) {
+  if (pairRows[index])
+    pairRows[index][side] = value
+}
+
+function addPair() {
+  if (pairRows.length < 12) {
+    pairRows.push({ left: '', right: '' })
+    drawPairs()
+  }
+}
+
+function removePair(index) {
+  if (pairRows.length > 2) {
+    pairRows.splice(index, 1)
+    drawPairs()
+  }
 }
 
 function describeAnswer(question) {
   if (question.kind === 'text')
     return (question.accepted?.answers || []).join(', ')
+  if (question.kind === 'matching')
+    return (question.accepted?.pairs || []).map(pair => `${pair.left} with ${pair.right}`).join(', ')
+  if (question.kind === 'ordering')
+    return question.options.map(option => option.label).join(', then ')
   if (question.kind === 'number')
     return question.accepted?.tolerance ? `${question.accepted.value}, give or take ${question.accepted.tolerance}` : String(question.accepted?.value ?? '')
   return question.options.filter(option => option.is_correct).map(option => option.label).join(', ')
@@ -138,9 +170,15 @@ function edit(questionId) {
     truth.set(question.options.find(option => option.is_correct)?.label === 'False' ? 'false' : 'true')
     blankRows()
   }
-  else if (question.kind === 'single' || question.kind === 'multiple') {
+  else if (question.kind === 'single' || question.kind === 'multiple' || question.kind === 'ordering') {
+    blankRows()
     rows = question.options.map(option => ({ label: option.label, correct: option.is_correct }))
     drawOptions()
+  }
+  else if (question.kind === 'matching') {
+    blankRows()
+    pairRows = (question.accepted?.pairs || []).map(pair => ({ ...pair }))
+    drawPairs()
   }
   else {
     blankRows()
@@ -194,6 +232,7 @@ async function saveQuestion() {
       ? [{ label: 'True', correct: truth() === 'true' }, { label: 'False', correct: truth() === 'false' }]
       : rows,
     answers: typedAnswers().split('\n'),
+    pairs: pairRows,
     value: numberValue(),
     tolerance: Number(numberMargin()) || 0,
   }
@@ -268,6 +307,8 @@ onMount(() => {
           <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'true_false' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'true_false'" @click="setKind('true_false')">True or false</button>
           <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'text' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'text'" @click="setKind('text')">Typed answer</button>
           <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'number' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'number'" @click="setKind('number')">Number</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'ordering' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'ordering'" @click="setKind('ordering')">Put in order</button>
+          <button type="button" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="kind() === 'matching' ? 'border-accent bg-accent-soft text-ink' : 'border-line bg-surface text-muted'" :aria-pressed="kind() === 'matching'" @click="setKind('matching')">Match pairs</button>
         </div>
       </fieldset>
 
@@ -276,17 +317,31 @@ onMount(() => {
         <textarea id="question-prompt" x-model="prompt" rows="2" required class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
       </div>
 
-      <fieldset class="mt-4" :hidden="kind() !== 'single' && kind() !== 'multiple'">
-        <legend class="font-medium text-ink text-sm">Answers</legend>
-        <p class="mt-1 text-muted text-sm">{{ kind() === 'single' ? 'Mark the one that is correct.' : 'Mark every one that is correct. A learner must pick exactly those.' }}</p>
+      <fieldset class="mt-4" :hidden="kind() !== 'single' && kind() !== 'multiple' && kind() !== 'ordering'">
+        <legend class="font-medium text-ink text-sm">{{ kind() === 'ordering' ? 'Items' : 'Answers' }}</legend>
+        <p class="mt-1 text-muted text-sm">{{ kind() === 'ordering' ? 'Write them in the right order. Learners get them shuffled.' : (kind() === 'single' ? 'Mark the one that is correct.' : 'Mark every one that is correct. A learner must pick exactly those.') }}</p>
         <ul class="flex flex-col gap-2 mt-3">
           <li :for="(option, index) in options()" class="flex gap-2 items-center">
-            <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 border rounded-xl" :class="option.correct ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface text-muted'" :aria-pressed="option.correct" :aria-label="'Answer ' + (index + 1) + ' is correct'" @click="mark(index)"><span class="size-5 i-hugeicons-checkmark-circle-02" aria-hidden="true"></span></button>
+            <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 border rounded-xl" :class="option.correct ? 'border-accent bg-accent text-accent-ink' : 'border-line bg-surface text-muted'" :hidden="kind() === 'ordering'" :aria-pressed="option.correct" :aria-label="'Answer ' + (index + 1) + ' is correct'" @click="mark(index)"><span class="size-5 i-hugeicons-checkmark-circle-02" aria-hidden="true"></span></button>
             <input type="text" class="flex-1 px-4 h-11 min-w-0 text-ink bg-surface border border-line rounded-xl" :aria-label="'Answer ' + (index + 1)" :value="option.label" @input="setLabel(index, $event.target.value)">
             <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 text-muted hover:text-ink rounded-full" :aria-label="'Remove answer ' + (index + 1)" :disabled="options().length <= 2" @click="removeRow(index)"><span class="size-4 i-hugeicons-delete-02" aria-hidden="true"></span></button>
           </li>
         </ul>
         <button type="button" class="inline-flex items-center mt-3 px-4 h-10 text-ink text-sm border border-line rounded-full" :hidden="options().length >= 12" @click="addRow()">Add an answer</button>
+      </fieldset>
+
+      <fieldset class="mt-4" :hidden="kind() !== 'matching'" hidden>
+        <legend class="font-medium text-ink text-sm">Pairs</legend>
+        <p class="mt-1 text-muted text-sm">Each item on the left and what it goes with. Learners get the right-hand side shuffled.</p>
+        <ul class="flex flex-col gap-2 mt-3">
+          <li :for="(pair, index) in pairs()" class="flex gap-2 items-center">
+            <input type="text" class="flex-1 px-4 h-11 min-w-0 text-ink bg-surface border border-line rounded-xl" :aria-label="'Item ' + (index + 1)" :value="pair.left" @input="setPair(index, 'left', $event.target.value)">
+            <span class="shrink-0 size-4 text-muted i-hugeicons-arrow-right-01" aria-hidden="true"></span>
+            <input type="text" class="flex-1 px-4 h-11 min-w-0 text-ink bg-surface border border-line rounded-xl" :aria-label="'Match for item ' + (index + 1)" :value="pair.right" @input="setPair(index, 'right', $event.target.value)">
+            <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 text-muted hover:text-ink rounded-full" :aria-label="'Remove pair ' + (index + 1)" :disabled="pairs().length <= 2" @click="removePair(index)"><span class="size-4 i-hugeicons-delete-02" aria-hidden="true"></span></button>
+          </li>
+        </ul>
+        <button type="button" class="inline-flex items-center mt-3 px-4 h-10 text-ink text-sm border border-line rounded-full" :hidden="pairs().length >= 12" @click="addPair()">Add a pair</button>
       </fieldset>
 
       <fieldset class="mt-4" :hidden="kind() !== 'true_false'" hidden>

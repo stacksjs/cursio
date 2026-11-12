@@ -27,6 +27,9 @@ export interface CatalogEntry {
   seconds: number
   /** It has at least one Lesson anyone may open. */
   hasPreview: boolean
+  /** Average review, one decimal. Null when nobody has reviewed it. */
+  rating?: number | null
+  reviews?: number
 }
 
 export interface Course {
@@ -187,6 +190,13 @@ export const forwarded: readonly (readonly [method: 'GET' | 'POST', path: string
   ['GET', '/learn/lessons/{id}/quiz', '/api/learn/lessons/{id}/quiz'],
   ['POST', '/learn/lessons/{id}/quiz/attempts', '/api/learn/lessons/{id}/quiz/attempts'],
   ['POST', '/learn/attempts/{id}/submit', '/api/learn/attempts/{id}/submit'],
+  ['GET', '/learn/{academy}/courses/{course}/reviews', '/api/learn/{academy}/courses/{course}/reviews'],
+  ['GET', '/learn/{academy}/courses/{course}/review', '/api/learn/{academy}/courses/{course}/review'],
+  ['POST', '/learn/{academy}/courses/{course}/review', '/api/learn/{academy}/courses/{course}/review'],
+  ['POST', '/learn/{academy}/courses/{course}/review/withdraw', '/api/learn/{academy}/courses/{course}/review/withdraw'],
+  ['GET', '/learn/lessons/{id}/notes', '/api/learn/lessons/{id}/notes'],
+  ['POST', '/learn/lessons/{id}/notes', '/api/learn/lessons/{id}/notes'],
+  ['POST', '/learn/notes/{id}/remove', '/api/learn/notes/{id}/remove'],
   ['GET', '/learn/lessons/{id}/comments', '/api/learn/lessons/{id}/comments'],
   ['POST', '/learn/lessons/{id}/comments', '/api/learn/lessons/{id}/comments'],
   ['POST', '/learn/comments/{id}/remove', '/api/learn/comments/{id}/remove'],

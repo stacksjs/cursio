@@ -27,6 +27,8 @@ route.post('/courses/{id}/lessons/{lesson}/quiz/reorder', 'Actions/Studio/Reorde
 route.patch('/courses/{id}/lessons/{lesson}/quiz/questions/{question}', 'Actions/Studio/SaveQuestionAction')
 route.delete('/courses/{id}/lessons/{lesson}/quiz/questions/{question}', 'Actions/Studio/DeleteQuestionAction')
 route.post('/courses/{id}/lessons/{lesson}/quiz/reopen', 'Actions/Studio/ReopenQuizAction')
+route.get('/courses/{id}/reviews', 'Actions/Studio/ReviewListAction')
+route.post('/courses/{id}/reviews/{review}/hidden', 'Actions/Studio/HideReviewAction')
 route.get('/banks', 'Actions/Studio/BankListAction')
 route.post('/banks', 'Actions/Studio/CreateBankAction')
 route.get('/banks/{bank}', 'Actions/Studio/BankShowAction')

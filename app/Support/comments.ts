@@ -62,7 +62,7 @@ export interface LessonComment {
   createdAt: string
 }
 
-interface Reader {
+export interface Reader {
   userId: number
   lessonId: number
   academyId: number
@@ -73,7 +73,7 @@ interface Reader {
  * Who is asking, and whether they may be here. One answer for "no such
  * lesson" and "not yours", as with Lesson content.
  */
-async function readerOf(userId: number, lessonId: number, at: Date): Promise<Reader> {
+export async function readerOf(userId: number, lessonId: number, at: Date): Promise<Reader> {
   const lesson = await db.selectFrom('lessons').select(['id', 'course_id']).where('id', '=', lessonId).executeTakeFirst() as { id: number, course_id: number } | undefined
   const course = lesson ? await db.selectFrom('courses').select(['id', 'academy_id']).where('id', '=', lesson.course_id).executeTakeFirst() as { id: number, academy_id: number } | undefined : undefined
   if (!lesson || !course)

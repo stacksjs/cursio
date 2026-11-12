@@ -575,6 +575,18 @@ declare module '@stacksjs/database' {
       last_ping_at: string
       user_id: number
     }
+    course_reviews: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      rating: number
+      body: string
+      hidden_at: string
+      course_id: number
+      user_id: number
+      enrollment_id: number
+    }
     course_sections: {
       // columns
       id: number
@@ -947,6 +959,16 @@ declare module '@stacksjs/database' {
       board_id: number
       name: string
       color: string
+    }
+    lesson_notes: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      body: string
+      position_seconds: number
+      user_id: number
+      lesson_id: number
     }
     lesson_progress: {
       // columns

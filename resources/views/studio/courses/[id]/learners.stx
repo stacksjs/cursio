@@ -17,6 +17,8 @@ const problem = state('')
 const busy = state(false)
 const quizzes = state([])
 const assignments = state([])
+// What learners said about the course, hidden reviews included.
+const reviews = state([])
 const learners = state([])
 const pendingRemove = state(0)
 // The export as a link the browser can save: filled in once it is fetched.
@@ -92,6 +94,8 @@ async function load() {
     quizzes.set(data.quizzes)
     assignments.set(data.assignments)
     learners.set(data.learners)
+    const said = await dashboardApi(`${base}/reviews`)
+    reviews.set(said.reviews)
     loaded.set(true)
   }
   catch (error) {
@@ -108,6 +112,19 @@ async function send(path, body) {
   try {
     await dashboardApi(`${base}${path}`, { method: 'POST', body })
     await load()
+  }
+  catch (error) {
+    problem.set(error?.message || 'That did not save.')
+  }
+  busy.set(false)
+}
+
+async function setHidden(reviewId, hidden) {
+  busy.set(true)
+  problem.set('')
+  try {
+    const data = await dashboardApi(`${base}/reviews/${reviewId}/hidden`, { method: 'POST', body: { hidden } })
+    reviews.set(data.reviews)
   }
   catch (error) {
     problem.set(error?.message || 'That did not save.')
@@ -199,6 +216,20 @@ onMount(load)
         </ul>
       </li>
     </ul>
+
+    <section class="mt-14" :hidden="reviews().length === 0" aria-labelledby="reviews-heading">
+      <h2 id="reviews-heading" class="font-semibold text-ink text-xl tracking-tight">Reviews</h2>
+      <p class="mt-1 max-w-[65ch] text-muted text-sm">What learners wrote about this course. A review you take down stops counting and is no longer shown, but is kept here.</p>
+      <ul class="flex flex-col gap-3 mt-5">
+        <li :for="review in reviews()" class="p-5 bg-surface border border-line rounded-2xl" :class="review.hidden ? 'opacity-70' : ''">
+          <div class="flex flex-wrap gap-3 items-center justify-between">
+            <p class="text-sm"><span class="font-medium text-ink">{{ review.author }}</span> <span class="tabular-nums text-muted">{{ review.rating }} of 5, {{ day(review.createdAt) }}</span></p>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-ink text-sm hover:bg-tint rounded-full" :disabled="busy()" @click="setHidden(review.id, !review.hidden)">{{ review.hidden ? 'Put back' : 'Take down' }}</button>
+          </div>
+          <p class="mt-2 max-w-[70ch] leading-relaxed text-ink whitespace-pre-line" :hidden="!review.body">{{ review.body || '' }}</p>
+        </li>
+      </ul>
+    </section>
   </div>
 </div>
 </template>

@@ -11,6 +11,7 @@ import type { AcademyRow } from './academies'
 import type { Outline, OutlineLesson, OutlineSection } from './progress'
 import { db } from '@stacksjs/database'
 import { buildOutline, isPermutation, slugFrom } from './progress'
+import { summariesOf } from './reviews'
 
 export interface CourseRow {
   id: number
@@ -412,6 +413,9 @@ export interface CatalogEntry {
   seconds: number
   /** It has at least one Lesson anyone may open. */
   hasPreview: boolean
+  /** Average of the reviews that stand, one decimal. Null when there are none. */
+  rating: number | null
+  reviews: number
 }
 
 /** The published Courses of an Academy with what a catalog card shows. */
@@ -422,8 +426,11 @@ export async function catalogOf(academyId: number): Promise<CatalogEntry[]> {
 
   const lessons = await db.selectFrom('lessons').select(['course_id', 'duration_seconds', 'is_preview']).where('course_id', 'in', courses.map(course => course.id)).execute() as { course_id: number, duration_seconds: number, is_preview: number | boolean }[]
 
+  const ratings = await summariesOf(courses.map(course => course.id))
+
   return courses.map((course) => {
     const own = lessons.filter(lesson => lesson.course_id === course.id)
+    const rated = ratings.get(course.id)
     return {
       title: course.title,
       slug: course.slug,
@@ -433,6 +440,8 @@ export async function catalogOf(academyId: number): Promise<CatalogEntry[]> {
       lessons: own.length,
       seconds: own.reduce((sum, lesson) => sum + lesson.duration_seconds, 0),
       hasPreview: own.some(lesson => Boolean(lesson.is_preview)),
+      rating: rated?.average ?? null,
+      reviews: rated?.count ?? 0,
     }
   })
 }

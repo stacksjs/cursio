@@ -67,6 +67,19 @@ const comments = state(null)
 const commentProblem = state('')
 const pendingRemove = state(0)
 let commentText = ''
+// The Learner's own notes on the open Lesson. Null until they are loaded.
+const notes = state(null)
+const noteProblem = state('')
+let noteText = ''
+// What Learners thought of the Course: public, with the reader's own on top.
+const reviewSummary = state({ count: 0, average: null })
+const reviews = state([])
+const myReview = state(null)
+const canReview = state(false)
+const stars = state(0)
+const reviewProblem = state('')
+const reviewSaved = state('')
+let reviewText = ''
 let workBody = ''
 let workLink = ''
 const attempt = state(null)
@@ -107,7 +120,130 @@ function take(progress) {
   locked.set(progress?.locked ?? {})
 }
 
+function takeReviews(data) {
+  reviewSummary.set(data.summary || { count: 0, average: null })
+  reviews.set(data.reviews || [])
+}
+
+async function loadReviews() {
+  try {
+    const answer = await fetch(`${coursePath}/reviews`, { headers: { Accept: 'application/json' } })
+    if (answer.ok)
+      takeReviews(await answer.json())
+  }
+  catch {
+    // Reviews are extra: the Course stands without them.
+  }
+}
+
+async function loadOwnReview() {
+  try {
+    const data = await dashboardApi(`${coursePath}/review`)
+    canReview.set(Boolean(data.canReview))
+    myReview.set(data.review)
+    if (data.review) {
+      stars.set(data.review.rating)
+      reviewText = data.review.body || ''
+    }
+  }
+  catch {
+    canReview.set(false)
+  }
+}
+
+function setReviewText(value) {
+  reviewText = value
+}
+
+async function saveReview() {
+  reviewProblem.set('')
+  reviewSaved.set('')
+  if (stars() < 1) {
+    reviewProblem.set('Pick a rating first.')
+    return
+  }
+  busy.set(true)
+  try {
+    const data = await dashboardApi(`${coursePath}/review`, { method: 'POST', body: { rating: stars(), body: reviewText } })
+    myReview.set(data.review)
+    takeReviews(data)
+    reviewSaved.set('Thank you. Your review is saved.')
+  }
+  catch (error) {
+    reviewProblem.set(error?.message || 'Your review could not be saved.')
+  }
+  busy.set(false)
+}
+
+async function withdrawReview(form) {
+  busy.set(true)
+  reviewProblem.set('')
+  reviewSaved.set('')
+  try {
+    const data = await dashboardApi(`${coursePath}/review/withdraw`, { method: 'POST', body: {} })
+    takeReviews(data)
+    myReview.set(null)
+    stars.set(0)
+    reviewText = ''
+    form.reset()
+  }
+  catch (error) {
+    reviewProblem.set(error?.message || 'Your review could not be withdrawn.')
+  }
+  busy.set(false)
+}
+
+async function loadNotes(lessonId) {
+  try {
+    const data = await dashboardApi(`${learnApi}/lessons/${lessonId}/notes`)
+    notes.set(data.notes)
+  }
+  catch {
+    notes.set(null)
+  }
+}
+
+function setNote(value) {
+  noteText = value
+}
+
+async function addNote(form) {
+  const lesson = openLesson()
+  if (!lesson)
+    return
+  busy.set(true)
+  noteProblem.set('')
+  try {
+    // A note written while a video plays remembers the moment it is about.
+    const seconds = player && lesson.video_url ? Math.floor(player.currentTime) : null
+    const data = await dashboardApi(`${learnApi}/lessons/${lesson.id}/notes`, { method: 'POST', body: { body: noteText, seconds } })
+    notes.set(data.notes)
+    noteText = ''
+    form.reset()
+  }
+  catch (error) {
+    noteProblem.set(error?.message || 'Your note could not be saved.')
+  }
+  busy.set(false)
+}
+
+async function removeNote(noteId) {
+  try {
+    const data = await dashboardApi(`${learnApi}/notes/${noteId}/remove`, { method: 'POST', body: {} })
+    notes.set(data.notes)
+  }
+  catch (error) {
+    noteProblem.set(error?.message || 'That note could not be removed.')
+  }
+}
+
+function seekTo(seconds) {
+  if (player && seconds !== null)
+    player.currentTime = seconds
+}
+
 async function load() {
+  loadReviews()
   signedIn.set(Boolean(useAuth().getToken()))
   if (!signedIn())
     return
@@ -116,6 +252,8 @@ async function load() {
     enrolled.set(data.enrolled)
     certificate.set(data.certificate || '')
     take(data.progress)
+    if (data.enrolled)
+      loadOwnReview()
   }
   catch {
     // Signed-out or expired: the page still shows the public outline.
@@ -207,6 +345,8 @@ async function open(lessonId) {
   result.set(null)
   comments.set(null)
   commentProblem.set('')
+  notes.set(null)
+  noteProblem.set('')
   try {
     // Not enrolled: only a free preview got this far, and it has its own door.
     const data = enrolled()
@@ -231,8 +371,10 @@ async function open(lessonId) {
         begin(sitting.quiz.open)
     }
     openLesson.set(data.lesson)
-    if (enrolled())
+    if (enrolled()) {
       loadComments(lessonId)
+      loadNotes(lessonId)
+    }
   }
   catch (error) {
     problem.set(error?.message || 'This lesson could not be opened.')
@@ -530,6 +672,7 @@ onMount(async () => {
     @if(totalRuntime)
       <span>{{ totalRuntime }}</span>
     @endif
+    <a href="#cursio-reviews" class="inline-flex gap-1 items-center text-ink hover:text-accent" :hidden="reviewSummary().count === 0" hidden><span class="size-4 text-accent i-hugeicons-star" aria-hidden="true"></span>{{ reviewSummary().average }} <span class="text-muted">({{ reviewSummary().count }})</span></a>
   </p>
 
   <div class="flex flex-wrap gap-3 items-center mt-6" :hidden="enrolled()">
@@ -701,6 +844,24 @@ onMount(async () => {
           </form>
         </div>
 
+        <section class="mt-10 pt-6 border-line border-t" :hidden="notes() === null" hidden aria-labelledby="notes-heading">
+          <h3 id="notes-heading" class="font-semibold text-ink text-lg tracking-tight">Your notes</h3>
+          <p class="mt-1 text-muted text-sm">Only you can see these.</p>
+          <ul class="flex flex-col gap-3 mt-4">
+            <li :for="note in notes() || []" class="flex gap-3 items-start p-4 bg-page border border-line rounded-xl">
+              <button type="button" class="shrink-0 px-2 h-7 font-mono tabular-nums text-accent text-xs bg-accent-soft rounded-full" :hidden="note.seconds === null" :aria-label="'Go to ' + note.clock" @click="seekTo(note.seconds)">{{ note.clock }}</button>
+              <p class="flex-1 min-w-0 leading-relaxed text-ink whitespace-pre-line">{{ note.body }}</p>
+              <button type="button" class="inline-flex items-center justify-center shrink-0 size-9 text-muted hover:text-ink rounded-full" aria-label="Remove this note" @click="removeNote(note.id)"><span class="size-4 i-hugeicons-delete-02" aria-hidden="true"></span></button>
+            </li>
+          </ul>
+          <form class="mt-4" @submit.prevent="addNote($event.target)">
+            <label for="cursio-note" class="block font-medium text-ink text-sm">Add a note</label>
+            <textarea id="cursio-note" rows="2" maxlength="4000" required class="mt-2 px-4 py-3 max-w-[70ch] w-full leading-relaxed text-ink bg-page border border-line rounded-xl" @input="setNote($event.target.value)"></textarea>
+            <p class="mt-2 font-medium text-ink text-sm" :hidden="!noteProblem()" hidden role="alert" x-text="noteProblem()"></p>
+            <button type="submit" class="inline-flex items-center mt-3 px-5 h-11 font-medium text-ink border border-line rounded-full disabled:opacity-60" :disabled="busy()">Save note</button>
+          </form>
+        </section>
+
         <section class="mt-10 pt-6 border-line border-t" :hidden="comments() === null" hidden aria-labelledby="discussion-heading">
           <h3 id="discussion-heading" class="font-semibold text-ink text-lg tracking-tight">Discussion</h3>
           <p class="mt-2 text-muted text-sm" :hidden="(comments() || []).length > 0">Nobody has commented yet. Ask the first question.</p>
@@ -725,6 +886,40 @@ onMount(async () => {
       </article>
     </div>
   </div>
+
+  <section id="cursio-reviews" class="mt-16 pt-10 border-line border-t" :hidden="reviewSummary().count === 0 && !canReview()" hidden aria-labelledby="reviews-heading">
+    <h2 id="reviews-heading" class="font-semibold text-2xl text-ink tracking-tight">Reviews</h2>
+    <p class="mt-1 text-muted" :hidden="reviewSummary().count === 0"><span class="font-semibold tabular-nums text-ink">{{ reviewSummary().average }}</span> out of 5, from {{ reviewSummary().count }} {{ reviewSummary().count === 1 ? 'review' : 'reviews' }}</p>
+
+    <form class="mt-6 p-6 max-w-2xl bg-surface border border-line rounded-2xl" :hidden="!canReview()" hidden @submit.prevent="saveReview()">
+      <fieldset>
+        <legend class="font-medium text-ink text-sm">{{ myReview() ? 'Your review' : 'What did you think?' }}</legend>
+        <div class="flex gap-1 mt-2">
+          <button :for="value in [1, 2, 3, 4, 5]" type="button" class="inline-flex items-center justify-center size-11 rounded-full transition-colors" :class="stars() >= value ? 'text-accent' : 'text-muted hover:text-ink'" :aria-pressed="stars() === value" :aria-label="value + (value === 1 ? ' star' : ' stars')" @click="stars.set(value)"><span class="size-6 i-hugeicons-star" aria-hidden="true"></span></button>
+        </div>
+      </fieldset>
+      <label for="cursio-review" class="block mt-4 font-medium text-ink text-sm">A few words, if you like</label>
+      <textarea id="cursio-review" rows="3" maxlength="2000" class="mt-2 px-4 py-3 w-full leading-relaxed text-ink bg-page border border-line rounded-xl" :value="myReview()?.body || ''" @input="setReviewText($event.target.value)"></textarea>
+      <p class="mt-2 font-medium text-ink text-sm" :hidden="!reviewProblem()" hidden role="alert" x-text="reviewProblem()"></p>
+      <div class="flex flex-wrap gap-3 items-center mt-4">
+        <button type="submit" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">{{ myReview() ? 'Save changes' : 'Post review' }}</button>
+        <button type="button" class="inline-flex items-center px-4 h-11 text-muted text-sm hover:text-ink rounded-full" :hidden="myReview() === null" :disabled="busy()" @click="withdrawReview($event.target.form)">Withdraw it</button>
+        <p class="text-muted text-sm" role="status" x-text="reviewSaved()"></p>
+      </div>
+    </form>
+    <p class="mt-6 p-4 max-w-2xl text-muted text-sm bg-tint rounded-xl" :hidden="!myReview()?.hidden" hidden>Your review was taken down by the academy.</p>
+
+    <ul class="flex flex-col gap-4 mt-8 max-w-2xl">
+      <li :for="review in reviews()" class="p-5 bg-surface border border-line rounded-2xl">
+        <p class="flex flex-wrap gap-x-3 gap-y-1 items-center text-sm">
+          <span class="font-medium text-ink">{{ review.author }}</span>
+          <span class="tabular-nums text-ink">{{ review.rating }} of 5</span>
+          <span class="text-muted">{{ commentDay(review.createdAt) }}</span>
+        </p>
+        <p class="mt-2 leading-relaxed text-ink whitespace-pre-line" :hidden="!review.body">{{ review.body || '' }}</p>
+      </li>
+    </ul>
+  </section>
 @else
   <h1 class="font-semibold text-3xl text-ink tracking-tight">Course not found</h1>
 @endif

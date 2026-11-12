@@ -185,6 +185,9 @@ onMount(async () => {
               @if(card.time)
                 <span>{{ card.time }}</span>
               @endif
+              @if(card.reviews > 0)
+                <span class="inline-flex gap-1 items-center text-ink"><span class="size-4 text-accent i-hugeicons-star" aria-hidden="true"></span>{{ card.rating }} <span class="text-muted">({{ card.reviews }})</span></span>
+              @endif
             </p>
           </a>
         </li>

@@ -34,7 +34,7 @@ export default defineModel({
   },
 
   belongsTo: ['Team', { model: 'Academy', onDelete: 'cascade' }],
-  hasMany: ['CourseSection', 'Lesson', 'Enrollment'],
+  hasMany: ['CourseSection', 'Lesson', 'Enrollment', 'Quiz', 'Certificate'],
 
   indexes: [
     { name: 'courses_academy_slug_unique', columns: ['academy_id', 'slug'], unique: true },

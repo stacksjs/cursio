@@ -45,6 +45,17 @@ declare module '@stacksjs/database' {
       currency: string
       properties: string
     }
+    attempt_answers: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      response: string
+      is_correct: number
+      points_awarded: number
+      quiz_attempt_id: number
+      question_id: number
+    }
     auction_items: {
       // columns
       id: number
@@ -384,6 +395,22 @@ declare module '@stacksjs/database' {
       is_active: number
       categorizable_id: number
       categorizable_type: string
+    }
+    certificates: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      serial: string
+      learner_name: string
+      course_title: string
+      academy_name: string
+      issued_at: string
+      revoked_at: string
+      team_id: number
+      user_id: number
+      course_id: number
+      enrollment_id: number
     }
     ci_run_states: {
       // columns
@@ -919,7 +946,7 @@ declare module '@stacksjs/database' {
       created_at: string
       updated_at: string | null
       title: string
-      kind: "video" | "reading"
+      kind: "video" | "reading" | "quiz"
       body: string
       video_url: string
       duration_seconds: number
@@ -1396,6 +1423,31 @@ declare module '@stacksjs/database' {
       explain_plan: string
       optimization_suggestions: string
     }
+    question_options: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      label: string
+      is_correct: number
+      position: number
+      team_id: number
+      question_id: number
+    }
+    questions: {
+      // columns
+      id: number
+      created_at: string
+      updated_at: string | null
+      kind: "single" | "multiple" | "true_false" | "text" | "number"
+      prompt: string
+      explanation: string
+      points: number
+      position: number
+      accepted: string
+      team_id: number
+      quiz_id: number
+    }
     queue_circuit_state: {
       // columns
       queue_name: string
@@ -1410,6 +1462,38 @@ declare module '@stacksjs/database' {
       worker_id: string
       snapshot: string
       heartbeat_at: number | bigint
+    }
+    quiz_attempts: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      status: "open" | "submitted" | "expired"
+      score_points: number
+      max_points: number
+      percent: number
+      passed: number
+      started_at: string
+      submitted_at: string
+      user_id: number
+      quiz_id: number
+      enrollment_id: number
+    }
+    quizzes: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      pass_percent: number
+      max_attempts: number
+      time_limit_seconds: number
+      shuffle: number
+      reveal: "never" | "after_submit" | "after_pass"
+      team_id: number
+      course_id: number
+      lesson_id: number
     }
     receipts: {
       // columns

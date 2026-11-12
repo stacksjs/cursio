@@ -12,6 +12,18 @@ const locked = state({})
 const openLesson = state(null)
 const busy = state(false)
 const problem = state('')
+const certificate = state('')
+
+// The quiz behind the open Lesson, when it is one.
+const quiz = state(null)
+const attempt = state(null)
+const result = state(null)
+const reviewed = state([])
+const picks = state({})
+const remaining = state(-1)
+// Typed answers are kept out of a signal so a keystroke redraws nothing.
+let typed = {}
+let ticking = 0
 
 const percent = derived(() => total === 0 ? 0 : Math.round((doneIds().length / total) * 100))
 const finished = derived(() => total > 0 && doneIds().length === total)
@@ -45,6 +57,7 @@ async function load() {
   try {
     const data = await dashboardApi(`${coursePath}/progress`)
     enrolled.set(data.enrolled)
+    certificate.set(data.certificate || '')
     take(data.progress)
   }
   catch {
@@ -71,8 +84,18 @@ async function open(lessonId) {
   if (!enrolled() || isLocked(lessonId))
     return
   problem.set('')
+  stopClock()
+  quiz.set(null)
+  attempt.set(null)
+  result.set(null)
   try {
     const data = await dashboardApi(`/api/learn/lessons/${lessonId}`)
+    if (data.lesson.kind === 'quiz') {
+      const sitting = await dashboardApi(`/api/learn/lessons/${lessonId}/quiz`)
+      quiz.set(sitting.quiz)
+      if (sitting.quiz.open)
+        begin(sitting.quiz.open)
+    }
     openLesson.set(data.lesson)
   }
   catch (error) {
@@ -89,13 +112,138 @@ async function complete() {
     const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/complete`, { method: 'POST', body: {} })
     take(data.progress)
     openLesson.set({ ...lesson, completed: true })
-    if (data.progress.nextLessonId && !data.progress.locked[data.progress.nextLessonId])
+    if (data.courseCompleted)
+      await load()
+    else if (data.progress.nextLessonId && !data.progress.locked[data.progress.nextLessonId])
       await open(data.progress.nextLessonId)
   }
   catch (error) {
     problem.set(error?.message || 'That did not save.')
   }
   busy.set(false)
+}
+
+function stopClock() {
+  if (ticking)
+    clearInterval(ticking)
+  ticking = 0
+  remaining.set(-1)
+}
+
+function begin(opened) {
+  typed = {}
+  picks.set({})
+  result.set(null)
+  attempt.set(opened)
+  stopClock()
+  if (!opened.deadline)
+    return
+  const closes = new Date(opened.deadline).getTime()
+  const tick = () => {
+    const left = Math.max(0, Math.round((closes - Date.now()) / 1000))
+    remaining.set(left)
+    // Out of time: hand in what is there rather than lose it.
+    if (left === 0 && attempt() && !busy())
+      submitQuiz()
+  }
+  tick()
+  ticking = setInterval(tick, 1000)
+}
+
+function clock() {
+  const left = remaining()
+  if (left < 0)
+    return ''
+  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+}
+
+async function startQuiz() {
+  const lesson = openLesson()
+  if (!lesson)
+    return
+  busy.set(true)
+  problem.set('')
+  try {
+    const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/quiz/attempts`, { method: 'POST', body: {} })
+    begin(data.attempt)
+  }
+  catch (error) {
+    problem.set(error?.message || 'The quiz could not be started.')
+  }
+  busy.set(false)
+}
+
+function isPicked(questionId, optionId) {
+  return (picks()[questionId] || []).includes(optionId)
+}
+
+function pick(questionId, kind, optionId) {
+  const chosen = picks()[questionId] || []
+  const next = kind === 'multiple'
+    ? (chosen.includes(optionId) ? chosen.filter(id => id !== optionId) : [...chosen, optionId])
+    : [optionId]
+  picks.set({ ...picks(), [questionId]: next })
+}
+
+function type(questionId, value) {
+  typed[questionId] = value
+}
+
+async function submitQuiz() {
+  const sitting = attempt()
+  if (!sitting)
+    return
+  busy.set(true)
+  problem.set('')
+  const answers = {}
+  for (const question of sitting.questions) {
+    if (question.kind === 'text' || question.kind === 'number')
+      answers[question.id] = typed[question.id] ?? ''
+    else
+      answers[question.id] = picks()[question.id] || []
+  }
+  try {
+    const data = await dashboardApi(`/api/learn/attempts/${sitting.id}/submit`, { method: 'POST', body: { answers } })
+    stopClock()
+    const byId = Object.fromEntries(data.result.questions.map(item => [item.id, item]))
+    reviewed.set(sitting.questions.map(question => ({ ...question, ...byId[question.id], right: rightAnswer(question, byId[question.id]) })))
+    attempt.set(null)
+    quiz.set(data.result.quiz)
+    result.set(data.result)
+    take(data.result.progress)
+    if (data.result.passed)
+      openLesson.set({ ...openLesson(), completed: true })
+    if (data.result.courseCompleted)
+      await load()
+  }
+  catch (error) {
+    stopClock()
+    attempt.set(null)
+    problem.set(error?.message || 'Your answers could not be handed in.')
+    const lesson = openLesson()
+    if (lesson)
+      await open(lesson.id)
+  }
+  busy.set(false)
+}
+
+/** The right answer in words, when the quiz reveals it. */
+function rightAnswer(question, review) {
+  if (!review || review.correctOptionIds === undefined)
+    return ''
+  if (question.kind === 'text')
+    return review.accepted?.answers?.[0] || ''
+  if (question.kind === 'number')
+    return String(review.accepted?.value ?? '')
+  return question.options.filter(option => review.correctOptionIds.includes(option.id)).map(option => option.label).join(', ')
+}
+
+function attemptsNote() {
+  const sitting = quiz()
+  // Once passed, how many tries remain is no longer the Learner's concern.
+  if (!sitting || sitting.attemptsLeft === null || sitting.passed)
+    return ''
+  return sitting.attemptsLeft === 1 ? '1 attempt left' : `${sitting.attemptsLeft} attempts left`
 }
 
 onMount(load)
@@ -120,6 +268,7 @@ onMount(load)
       <div class="h-full bg-accent rounded-full duration-300 transition-all" :style="`width: ${percent()}%`"></div>
     </div>
     <p class="mt-3 font-medium text-ink" :hidden="!finished()" hidden role="status">You have completed this course.</p>
+    <a :href="'/certificates/' + certificate()" class="inline-flex gap-2 items-center mt-3 px-5 h-11 font-medium text-ink hover:bg-tint border border-line rounded-full transition-colors" :hidden="!certificate()" hidden><span class="size-5 i-hugeicons-certificate-01" aria-hidden="true"></span>View your certificate</a>
   </div>
 
   <p class="mt-4 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
@@ -150,7 +299,67 @@ onMount(load)
         <h2 class="font-semibold text-2xl text-ink tracking-tight">{{ openLesson()?.title }}</h2>
         <video class="mt-4 w-full rounded-xl" controls :hidden="!openLesson()?.video_url" hidden :src="openLesson()?.video_url || ''"></video>
         <p class="mt-4 leading-relaxed text-ink whitespace-pre-line">{{ openLesson()?.body || '' }}</p>
-        <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
+        <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="openLesson()?.kind === 'quiz'" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
+
+        <div :hidden="quiz() === null" hidden>
+          <div :hidden="attempt() !== null">
+            <dl class="grid gap-4 grid-cols-3 mt-6 py-4 border-line border-y">
+              <div>
+                <dt class="text-muted text-xs">Questions</dt>
+                <dd class="mt-1 font-semibold tabular-nums text-ink">{{ quiz()?.questionCount }}</dd>
+              </div>
+              <div>
+                <dt class="text-muted text-xs">To pass</dt>
+                <dd class="mt-1 font-semibold tabular-nums text-ink">{{ quiz()?.passPercent }}%</dd>
+              </div>
+              <div>
+                <dt class="text-muted text-xs">Time</dt>
+                <dd class="mt-1 font-semibold tabular-nums text-ink">{{ quiz()?.timeLimitSeconds ? Math.round(quiz().timeLimitSeconds / 60) + ' min' : 'No limit' }}</dd>
+              </div>
+            </dl>
+
+            <div class="mt-6 p-5 rounded-2xl" :class="result()?.passed ? 'bg-accent-soft' : 'bg-tint'" :hidden="result() === null" hidden role="status">
+              <p class="font-semibold text-2xl text-ink tracking-tight">{{ result()?.passed ? 'Passed' : 'Not passed yet' }}</p>
+              <p class="mt-1 text-ink"><span class="font-semibold tabular-nums">{{ result()?.percent }}%</span>, {{ result()?.score }} of {{ result()?.max }} points</p>
+            </div>
+
+            <ol class="flex flex-col gap-3 mt-4" :hidden="result() === null" hidden>
+              <li :for="item in reviewed()" class="flex gap-3 items-start">
+                <span class="shrink-0 mt-0.5 size-5" :class="item.correct ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-cancel-circle text-muted'" aria-hidden="true"></span>
+                <div class="min-w-0">
+                  <p class="text-ink text-sm">{{ item.prompt }} <span class="sr-only">{{ item.correct ? 'Correct' : 'Incorrect' }}</span></p>
+                  <p class="mt-1 text-muted text-sm" :hidden="!item.right">Answer: {{ item.right }}</p>
+                  <p class="mt-1 text-muted text-sm" :hidden="!item.explanation">{{ item.explanation }}</p>
+                </div>
+              </li>
+            </ol>
+
+            <div class="flex flex-wrap gap-4 items-center mt-6">
+              <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="quiz()?.attemptsLeft === 0" :disabled="busy()" @click="startQuiz()">{{ (quiz()?.attempts.length || 0) > 0 ? 'Try again' : 'Start the quiz' }}</button>
+              <p class="text-muted text-sm" x-text="attemptsNote()"></p>
+              <p class="font-medium text-accent text-sm" :hidden="!quiz()?.passed" hidden>Passed</p>
+            </div>
+            <p class="mt-3 text-muted text-sm" :hidden="quiz()?.attemptsLeft !== 0 || quiz()?.passed" hidden>You have used every attempt. Ask your instructor to open another.</p>
+          </div>
+
+          <form class="mt-6" :hidden="attempt() === null" hidden @submit.prevent="submitQuiz()">
+            <p class="inline-flex sticky top-20 z-10 gap-2 items-center px-4 h-10 font-medium tabular-nums text-ink text-sm bg-tint rounded-full" :hidden="remaining() < 0" hidden role="timer"><span class="size-4 i-hugeicons-timer-02" aria-hidden="true"></span><span x-text="clock()"></span></p>
+            <ol class="flex flex-col gap-8 mt-4">
+              <li :for="(question, index) in attempt()?.questions || []">
+                <p class="font-medium text-ink"><span class="tabular-nums text-muted">{{ index + 1 }}.</span> {{ question.prompt }}</p>
+                <p class="mt-1 text-muted text-xs" :hidden="question.kind !== 'multiple'">Pick every answer that applies.</p>
+                <div class="flex flex-col gap-2 mt-3" :hidden="question.options.length === 0">
+                  <button :for="option in question.options" type="button" class="flex gap-3 items-center px-4 py-3 w-full text-left text-sm border rounded-xl transition-colors" :class="isPicked(question.id, option.id) ? 'border-accent bg-accent-soft text-ink' : 'border-line text-ink hover:bg-tint'" :aria-pressed="isPicked(question.id, option.id)" @click="pick(question.id, question.kind, option.id)">
+                    <span class="shrink-0 size-5" :class="isPicked(question.id, option.id) ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-circle text-muted'" aria-hidden="true"></span>
+                    <span>{{ option.label }}</span>
+                  </button>
+                </div>
+                <input :hidden="question.kind !== 'text' && question.kind !== 'number'" :type="question.kind === 'number' ? 'number' : 'text'" step="any" autocomplete="off" class="mt-3 px-4 h-11 max-w-sm w-full text-ink bg-page border border-line rounded-xl" :aria-label="'Your answer to question ' + (index + 1)" @input="type(question.id, $event.target.value)">
+              </li>
+            </ol>
+            <button type="submit" class="inline-flex items-center mt-8 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">Hand in answers</button>
+          </form>
+        </div>
       </article>
     </div>
   </div>

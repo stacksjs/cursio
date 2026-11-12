@@ -91,7 +91,7 @@ export async function addSection(course: CourseRow, input: { title: string }): P
   return { id: row.id, title, position }
 }
 
-export const lessonKinds = ['video', 'reading'] as const
+export const lessonKinds = ['video', 'reading', 'quiz'] as const
 export type LessonKind = typeof lessonKinds[number]
 
 export async function addLesson(course: CourseRow, input: { sectionId: number, title: string, kind?: string, body?: string, videoUrl?: string, durationSeconds?: number, unlockAfterDays?: number | null }): Promise<OutlineLesson> {
@@ -131,6 +131,11 @@ export async function addLesson(course: CourseRow, input: { sectionId: number, t
     uuid: crypto.randomUUID(),
   }).returning(['id']).executeTakeFirst() as { id: number }
 
+  // A quiz Lesson always has its Quiz: the two are created together so there
+  // is never a quiz Lesson with nothing behind it.
+  if (kind === 'quiz')
+    await db.insertInto('quizzes').values({ team_id: course.team_id, course_id: course.id, lesson_id: row.id, uuid: crypto.randomUUID() }).execute()
+
   return { id: row.id, course_section_id: input.sectionId, title, kind, duration_seconds: durationSeconds, position, unlock_after_days: unlockDays(input.unlockAfterDays) }
 }
 
@@ -150,6 +155,16 @@ export async function publishCourse(course: CourseRow): Promise<CourseRow> {
   const outline = await outlineOf(course.id)
   if (outline.lessonIds.length === 0)
     throw new CourseError('Add at least one lesson before publishing.')
+
+  // A Quiz with no questions is a Lesson nobody can complete.
+  const quizzes = await db.selectFrom('quizzes').select(['id', 'lesson_id']).where('course_id', '=', course.id).execute() as { id: number, lesson_id: number }[]
+  for (const quiz of quizzes) {
+    const question = await db.selectFrom('questions').select(['id']).where('quiz_id', '=', quiz.id).executeTakeFirst()
+    if (!question) {
+      const title = outline.sections.flatMap(section => section.lessons).find(lesson => lesson.id === quiz.lesson_id)?.title ?? 'A quiz'
+      throw new CourseError(`"${title}" has no questions yet. Add one before publishing.`)
+    }
+  }
 
   if (course.status === 'published')
     return course
@@ -245,6 +260,9 @@ export async function updateLesson(course: CourseRow, lessonId: number, input: {
     throw new CourseError('A lesson needs a title.')
   if (!lessonKinds.includes(kind))
     throw new CourseError('That lesson type is not supported yet.')
+  // The Quiz row is made with the Lesson, so the type is fixed at creation.
+  if ((kind === 'quiz') !== (lesson.kind === 'quiz'))
+    throw new CourseError('A quiz cannot become another lesson type, or the other way round. Add a new lesson instead.')
   if (kind === 'video' && !videoUrl)
     throw new CourseError('A video lesson needs a video.')
   if (videoUrl && !/^https:\/\//.test(videoUrl))
@@ -279,8 +297,33 @@ export async function updateLesson(course: CourseRow, lessonId: number, input: {
  */
 export async function deleteLesson(course: CourseRow, lessonId: number): Promise<void> {
   await lessonOf(course, lessonId)
+  await deleteQuizzesOf([lessonId])
   await db.deleteFrom('lesson_progress').where('lesson_id', '=', lessonId).execute()
   await db.deleteFrom('lessons').where('id', '=', lessonId).execute()
+}
+
+/**
+ * Remove the Quizzes behind these Lessons with everything under them. Done by
+ * hand, leaf first, rather than left to the foreign keys: not every driver
+ * this runs on enforces a cascade.
+ */
+async function deleteQuizzesOf(lessonIds: number[]): Promise<void> {
+  const quizzes = await db.selectFrom('quizzes').select(['id']).where('lesson_id', 'in', lessonIds).execute() as { id: number }[]
+  if (quizzes.length === 0)
+    return
+  const quizIds = quizzes.map(row => row.id)
+
+  const attempts = await db.selectFrom('quiz_attempts').select(['id']).where('quiz_id', 'in', quizIds).execute() as { id: number }[]
+  if (attempts.length > 0) {
+    await db.deleteFrom('attempt_answers').where('quiz_attempt_id', 'in', attempts.map(row => row.id)).execute()
+    await db.deleteFrom('quiz_attempts').where('quiz_id', 'in', quizIds).execute()
+  }
+  const questions = await db.selectFrom('questions').select(['id']).where('quiz_id', 'in', quizIds).execute() as { id: number }[]
+  if (questions.length > 0) {
+    await db.deleteFrom('question_options').where('question_id', 'in', questions.map(row => row.id)).execute()
+    await db.deleteFrom('questions').where('quiz_id', 'in', quizIds).execute()
+  }
+  await db.deleteFrom('quizzes').where('id', 'in', quizIds).execute()
 }
 
 /** Remove a Section and every Lesson in it. */
@@ -288,6 +331,7 @@ export async function deleteSection(course: CourseRow, sectionId: number): Promi
   await sectionOf(course, sectionId)
   const lessons = await db.selectFrom('lessons').select(['id']).where('course_section_id', '=', sectionId).execute() as { id: number }[]
   if (lessons.length > 0) {
+    await deleteQuizzesOf(lessons.map(row => row.id))
     await db.deleteFrom('lesson_progress').where('lesson_id', 'in', lessons.map(row => row.id)).execute()
     await db.deleteFrom('lessons').where('course_section_id', '=', sectionId).execute()
   }

@@ -6,8 +6,10 @@
 import type { AcademyRow } from './academies'
 import { response } from '@stacksjs/router'
 import { AcademyError, academyForStaff } from './academies'
-import { CourseError } from './courses'
+import type { CourseRow } from './courses'
+import { CourseError, courseInAcademy } from './courses'
 import { EnrollmentError } from './enrollment'
+import { QuizError } from './quizzes'
 
 /** The signed-in user's id, or null. Never read from the request body. */
 export async function userIdOf(request: RequestInstance): Promise<number | null> {
@@ -35,7 +37,7 @@ export async function staffContext(request: RequestInstance): Promise<{ userId: 
 
 /** A rule the domain refused is the caller's to fix: 422 with its message. */
 export function refusal(error: unknown): Response {
-  if (error instanceof AcademyError || error instanceof CourseError || error instanceof EnrollmentError)
+  if (error instanceof AcademyError || error instanceof CourseError || error instanceof EnrollmentError || error instanceof QuizError)
     return response.json({ success: false, message: error.message }, 422)
 
   throw error
@@ -56,4 +58,17 @@ export function sent(request: RequestInstance, name: string): string | undefined
 export function idList(request: RequestInstance, name: string): number[] {
   const value = request.get(name)
   return Array.isArray(value) ? value.map(Number).filter(id => Number.isInteger(id) && id > 0) : []
+}
+
+/** The Course a studio request names in `{id}`, found only inside the caller's Academy. */
+export async function studioCourse(request: RequestInstance): Promise<{ userId: number, academy: AcademyRow, course: CourseRow } | Response> {
+  const context = await staffContext(request)
+  if (context instanceof Response)
+    return context
+
+  const course = await courseInAcademy(context.academy, idParam(request, 'id'))
+  if (!course)
+    return response.notFound('Course not found')
+
+  return { ...context, course }
 }

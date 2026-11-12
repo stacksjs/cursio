@@ -1,6 +1,7 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
 import { academyBySlug } from '../../Support/academies'
+import { certificateOf } from '../../Support/certificates'
 import { publishedCourse } from '../../Support/courses'
 import { enrollmentOf, progressOf } from '../../Support/enrollment'
 import { userIdOf } from '../../Support/http'
@@ -23,6 +24,12 @@ export default new Action({
     const enrollment = await enrollmentOf(userId, course.id)
     const active = enrollment && enrollment.status !== 'revoked' ? enrollment : null
 
-    return response.json({ enrolled: active !== null, progress: active ? await progressOf(active) : null })
+    const certificate = active ? await certificateOf(active.id) : null
+
+    return response.json({
+      enrolled: active !== null,
+      progress: active ? await progressOf(active) : null,
+      certificate: certificate && !certificate.revoked_at ? certificate.serial : null,
+    })
   },
 })

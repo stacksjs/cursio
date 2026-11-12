@@ -1,0 +1,53 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+import { certificateBySerial } from '~/app/Support/certificates'
+
+// Anyone holding a serial may check it. The page says what the Certificate
+// itself says and nothing more about the Learner.
+const given = typeof serial !== 'undefined' ? String(serial) : ''
+const found = await certificateBySerial(given)
+const revoked = Boolean(found?.revoked_at)
+const issuedOn = found
+  ? new Date(/[zZ]$/.test(found.issued_at) ? found.issued_at : `${found.issued_at.replace(' ', 'T')}Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+  : ''
+
+const pageTitle = found ? `${found.learner_name} - ${found.course_title}` : 'Certificate not found'
+const pageDescription = found ? `Certificate of completion for ${found.course_title}, issued by ${found.academy_name}.` : 'No certificate has this serial.'
+</script>
+<template>
+<div data-stx-content>
+@if(found)
+  <p class="inline-flex gap-2 items-center px-4 h-10 font-medium text-sm rounded-full print:hidden {{ revoked ? 'bg-tint text-ink' : 'bg-accent-soft text-ink' }}" role="status">
+    <span class="size-5 {{ revoked ? 'i-hugeicons-cancel-circle text-muted' : 'i-hugeicons-checkmark-circle-02 text-accent' }}" aria-hidden="true"></span>
+    {{ revoked ? 'This certificate was withdrawn by the academy that issued it.' : 'This certificate is genuine.' }}
+  </p>
+
+  <article class="mt-6 px-6 py-12 md:px-16 md:py-20 text-center bg-surface border border-line rounded-2xl {{ revoked ? 'opacity-60' : '' }}">
+    <span class="mx-auto size-12 text-accent i-hugeicons-award-01" aria-hidden="true"></span>
+    <p class="mt-6 text-muted text-sm tracking-wide uppercase">Certificate of completion</p>
+    <h1 class="mt-6 font-semibold text-4xl text-ink tracking-tight md:text-5xl">{{ found.learner_name }}</h1>
+    <p class="mt-6 text-muted">has completed</p>
+    <p class="mt-2 font-semibold text-2xl text-ink tracking-tight">{{ found.course_title }}</p>
+    <p class="mt-2 text-muted">at {{ found.academy_name }}</p>
+
+    <dl class="grid gap-6 grid-cols-1 sm:grid-cols-2 mt-12 mx-auto pt-8 max-w-md border-line border-t">
+      <div>
+        <dt class="text-muted text-xs">Issued</dt>
+        <dd class="mt-1 text-ink">{{ issuedOn }}</dd>
+      </div>
+      <div>
+        <dt class="text-muted text-xs">Serial</dt>
+        <dd class="mt-1 font-mono text-ink">{{ found.serial }}</dd>
+      </div>
+    </dl>
+  </article>
+
+  <p class="print:hidden mt-6 text-muted text-sm">Print this page to keep a copy. Its address is the proof: anyone who opens it sees this check.</p>
+@else
+  <h1 class="font-semibold text-3xl text-ink tracking-tight">No certificate has this serial</h1>
+  <p class="mt-3 max-w-[60ch] text-muted">Check it against the certificate you were given. A serial looks like CUR-ABCD-EFGH-2345.</p>
+@endif
+</div>
+</template>
+@endsection

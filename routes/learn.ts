@@ -11,3 +11,6 @@ route.get('/{academy}/courses/{course}/progress', 'Actions/Learn/CourseProgressA
 route.post('/{academy}/courses/{course}/enroll', 'Actions/Learn/EnrollAction').middleware('auth')
 route.get('/lessons/{id}', 'Actions/Learn/LessonShowAction').middleware('auth')
 route.post('/lessons/{id}/complete', 'Actions/Learn/CompleteLessonAction').middleware('auth')
+route.get('/lessons/{id}/quiz', 'Actions/Learn/QuizShowAction').middleware('auth')
+route.post('/lessons/{id}/quiz/attempts', 'Actions/Learn/StartAttemptAction').middleware('auth')
+route.post('/attempts/{id}/submit', 'Actions/Learn/SubmitAttemptAction').middleware('auth')

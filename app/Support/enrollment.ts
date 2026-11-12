@@ -11,6 +11,7 @@ import type { CourseRow } from './courses'
 import type { CourseProgress, LessonAccess } from './progress'
 import { db } from '@stacksjs/database'
 import { isUniqueViolation } from '@stacksjs/orm'
+import { issueCertificate } from './certificates'
 import { outlineOf } from './courses'
 import { courseProgress, lessonAccess } from './progress'
 
@@ -68,7 +69,7 @@ async function completedLessonIds(enrollmentId: number): Promise<number[]> {
 }
 
 /** SQLite stores `2026-11-11 21:00:00` in UTC with no zone; read it as UTC. */
-function utc(stamp: string): Date {
+export function utc(stamp: string): Date {
   return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(stamp) ? stamp : `${stamp.replace(' ', 'T')}Z`)
 }
 
@@ -110,8 +111,8 @@ function closedMessage(access: LessonAccess): string {
  * Learner holds an active Enrollment in. When it was the last one, the
  * Enrollment is completed in the same call.
  */
-export async function completeLesson(userId: number, lessonId: number, at: Date = new Date()): Promise<{ enrollment: EnrollmentRow, progress: LearnerProgress }> {
-  const lesson = await db.selectFrom('lessons').select(['id', 'course_id']).where('id', '=', lessonId).executeTakeFirst() as { id: number, course_id: number } | undefined
+export async function completeLesson(userId: number, lessonId: number, at: Date = new Date(), options: { viaQuiz?: boolean } = {}): Promise<{ enrollment: EnrollmentRow, progress: LearnerProgress }> {
+  const lesson = await db.selectFrom('lessons').select(['id', 'course_id', 'kind']).where('id', '=', lessonId).executeTakeFirst() as { id: number, course_id: number, kind: string } | undefined
   const enrollment = lesson ? await enrollmentOf(userId, lesson.course_id) : null
 
   // One answer for "no such lesson" and "not yours": which Lessons exist is not
@@ -122,6 +123,11 @@ export async function completeLesson(userId: number, lessonId: number, at: Date 
   const closed = (await progressOf(enrollment, at)).locked[lesson.id]
   if (closed)
     throw new EnrollmentError(closedMessage(closed))
+
+  // A quiz Lesson is completed by passing it. Only the quiz submission, which
+  // has just graded a passing Attempt, may say so.
+  if (lesson.kind === 'quiz' && !options.viaQuiz)
+    throw new EnrollmentError('Pass the quiz to complete this lesson.')
 
   const stamp = at.toISOString()
   // Looked up first so that completing a Lesson twice, which is ordinary, does
@@ -144,6 +150,10 @@ export async function completeLesson(userId: number, lessonId: number, at: Date 
     enrollment.status = 'completed'
     enrollment.completed_at = stamp
   }
+  // Outside the branch above on purpose: if issuing failed once, the next
+  // completed Lesson (or a repeat of this one) issues it.
+  if (enrollment.status === 'completed')
+    await issueCertificate(enrollment, at)
 
   return { enrollment, progress }
 }

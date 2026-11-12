@@ -186,11 +186,12 @@ onMount(load)
         <p class="mt-2 text-muted text-sm" :hidden="section.lessons.length > 0">No lessons in this section yet.</p>
         <ul class="flex flex-col gap-1 mt-3">
           <li :for="lesson in section.lessons" class="flex gap-3 items-center pl-3 rounded-xl" :class="editingLesson() === lesson.id ? 'bg-tint' : ''">
-            <span class="shrink-0 size-4 text-muted" :class="lesson.kind === 'video' ? 'i-hugeicons-play-circle' : 'i-hugeicons-book-open-01'" aria-hidden="true"></span>
+            <span class="shrink-0 size-4 text-muted" :class="lesson.kind === 'video' ? 'i-hugeicons-play-circle' : (lesson.kind === 'quiz' ? 'i-hugeicons-quiz-01' : 'i-hugeicons-book-open-01')" aria-hidden="true"></span>
             <span class="flex-1 text-ink text-sm">{{ lesson.title }}</span>
             <span class="text-muted text-xs" :hidden="!lesson.unlock_after_days">Opens after {{ lesson.unlock_after_days }} {{ lesson.unlock_after_days === 1 ? 'day' : 'days' }}</span>
             <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move lesson up" :disabled="busy()" @click="moveLesson(section.id, lesson.id, -1)"><span class="size-4 i-hugeicons-arrow-up-01" aria-hidden="true"></span></button>
             <button type="button" class="inline-flex items-center justify-center size-9 text-muted hover:text-ink rounded-full" aria-label="Move lesson down" :disabled="busy()" @click="moveLesson(section.id, lesson.id, 1)"><span class="size-4 i-hugeicons-arrow-down-01" aria-hidden="true"></span></button>
+            <a :href="'/studio/courses/' + editingId + '/quiz/' + lesson.id" class="inline-flex items-center px-3 h-9 font-medium text-ink text-sm hover:bg-tint rounded-full" :hidden="lesson.kind !== 'quiz'">Questions</a>
             <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" @click="editLesson(lesson.id)">Edit</button>
             <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" :disabled="busy()" @click="remove('lesson', lesson.id)">{{ pendingDelete() === 'lesson-' + lesson.id ? 'Really delete?' : 'Delete' }}</button>
           </li>
@@ -221,9 +222,10 @@ onMount(load)
         </div>
         <div>
           <label for="lesson-kind" class="block font-medium text-ink text-sm">Type</label>
-          <select id="lesson-kind" x-model="lessonKind" class="mt-2 px-3 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+          <select id="lesson-kind" x-model="lessonKind" :disabled="editingLesson() !== 0" class="mt-2 px-3 h-11 w-full text-ink bg-surface border border-line rounded-xl">
             <option value="reading">Reading</option>
             <option value="video">Video</option>
+            <option value="quiz">Quiz</option>
           </select>
         </div>
       </div>
@@ -233,9 +235,10 @@ onMount(load)
         <p id="lesson-video-help" class="mt-2 text-muted text-sm">An https link to the video file. Uploads arrive with the media library.</p>
       </div>
       <div class="mt-4">
-        <label for="lesson-body" class="block font-medium text-ink text-sm">Content</label>
+        <label for="lesson-body" class="block font-medium text-ink text-sm">{{ lessonKind() === 'quiz' ? 'Introduction' : 'Content' }}</label>
         <textarea id="lesson-body" x-model="lessonBody" rows="6" class="mt-2 px-4 py-3 w-full text-ink bg-surface border border-line rounded-xl"></textarea>
       </div>
+      <p class="mt-2 text-muted text-sm" :hidden="lessonKind() !== 'quiz' || editingLesson() !== 0" hidden>Add the lesson, then write its questions.</p>
       <div class="mt-4 max-w-xs">
         <label for="lesson-days" class="block font-medium text-ink text-sm">Opens after (days)</label>
         <input id="lesson-days" x-model="lessonDays" type="number" min="0" max="3650" aria-describedby="lesson-days-help" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">

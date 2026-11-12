@@ -58,7 +58,7 @@ export const features: Feature[] = [
     title: 'Quizzes and certificates',
     summary: 'Nine question types, question banks, graded assignments, and certificates anyone can verify by link.',
     icon: 'i-hugeicons-certificate-01',
-    status: 'planned',
+    status: 'building',
     horizon: 'next',
   },
   {

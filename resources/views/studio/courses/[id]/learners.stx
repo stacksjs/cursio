@@ -1,0 +1,169 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+const pageTitle = 'Learners - Cursio Studio'
+const courseId = typeof id !== 'undefined' ? Number(id) : 0
+</script>
+<script client>
+import { useAuth } from '~/storage/framework/defaults/functions/auth'
+import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
+
+const courseHome = `/studio/courses/{{ courseId }}`
+const base = `/api/studio/courses/{{ courseId }}`
+
+const loading = state(true)
+const loaded = state(false)
+const problem = state('')
+const busy = state(false)
+const quizzes = state([])
+const learners = state([])
+const pendingRemove = state(0)
+// The export as a link the browser can save: filled in once it is fetched.
+const exportHref = state('')
+
+const active = derived(() => learners().filter(learner => learner.status !== 'revoked').length)
+const finished = derived(() => learners().filter(learner => learner.status === 'completed').length)
+
+function day(stamp) {
+  if (!stamp)
+    return ''
+  const date = new Date(/[zZ]$/.test(stamp) ? stamp : `${stamp.replace(' ', 'T')}Z`)
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+function statusText(learner) {
+  if (learner.status === 'revoked')
+    return 'Access removed'
+  return learner.status === 'completed' ? `Completed ${day(learner.completedAt)}` : `Enrolled ${day(learner.enrolledAt)}`
+}
+
+/** One line per quiz for a learner: its title and how they stand on it. */
+function results(learner) {
+  return quizzes().map((quiz) => {
+    const standing = learner.quizzes[quiz.lessonId]
+    return {
+      lessonId: quiz.lessonId,
+      title: quiz.title,
+      text: standing ? `${standing.best}%${standing.passed ? ', passed' : ''} (${standing.attempts} ${standing.attempts === 1 ? 'attempt' : 'attempts'})` : 'Not attempted',
+      passed: Boolean(standing?.passed),
+      canReopen: Boolean(standing) && !standing.passed,
+    }
+  })
+}
+
+async function load() {
+  try {
+    const data = await dashboardApi(`${base}/gradebook`)
+    quizzes.set(data.quizzes)
+    learners.set(data.learners)
+    loaded.set(true)
+  }
+  catch (error) {
+    problem.set(error?.status === 401 ? 'Sign in to see this course.' : (error?.message || 'The learners could not be loaded.'))
+  }
+  loading.set(false)
+}
+
+async function send(path, body) {
+  busy.set(true)
+  problem.set('')
+  pendingRemove.set(0)
+  exportHref.set('')
+  try {
+    await dashboardApi(`${base}${path}`, { method: 'POST', body })
+    await load()
+  }
+  catch (error) {
+    problem.set(error?.message || 'That did not save.')
+  }
+  busy.set(false)
+}
+
+function remove(enrollmentId) {
+  if (pendingRemove() !== enrollmentId) {
+    pendingRemove.set(enrollmentId)
+    return
+  }
+  send(`/enrollments/${enrollmentId}/access`, { allowed: false })
+}
+
+function restore(enrollmentId) {
+  send(`/enrollments/${enrollmentId}/access`, { allowed: true })
+}
+
+function reopen(lessonId, enrollmentId) {
+  send(`/lessons/${lessonId}/quiz/reopen`, { enrollment_id: enrollmentId })
+}
+
+async function prepareExport() {
+  busy.set(true)
+  problem.set('')
+  try {
+    const answer = await fetch(`${base}/gradebook?format=csv`, { headers: { Authorization: `Bearer ${useAuth().getToken()}` } })
+    if (!answer.ok)
+      throw new Error('The export could not be made.')
+    exportHref.set(`data:text/csv;charset=utf-8,${encodeURIComponent(await answer.text())}`)
+  }
+  catch (error) {
+    problem.set(error?.message || 'The export could not be made.')
+  }
+  busy.set(false)
+}
+
+onMount(load)
+</script>
+<template>
+<div data-stx-content>
+  <a :href="courseHome" class="text-muted text-sm hover:text-ink">Back to the course</a>
+
+  <p class="mt-6 text-muted" :hidden="!loading()">Loading the learners.</p>
+  <p class="mt-6 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+
+  <div :hidden="!loaded()" hidden>
+    <div class="flex flex-wrap gap-4 items-end justify-between mt-4">
+      <div>
+        <h1 class="font-semibold text-3xl text-ink tracking-tight">Learners</h1>
+        <p class="mt-1 text-muted text-sm">{{ active() }} enrolled, {{ finished() }} completed</p>
+      </div>
+      <div class="flex gap-2 items-center" :hidden="learners().length === 0">
+        <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-ink whitespace-nowrap border border-line rounded-full disabled:opacity-60" :hidden="exportHref() !== ''" :disabled="busy()" @click="prepareExport()">Export as CSV</button>
+        <a :href="exportHref()" download="gradebook.csv" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full" :hidden="exportHref() === ''" hidden>Download the file</a>
+      </div>
+    </div>
+
+    <p class="mt-8 p-6 text-muted bg-tint rounded-2xl" :hidden="learners().length > 0">Nobody has enrolled yet. Learners appear here as soon as they do.</p>
+
+    <ul class="flex flex-col gap-3 mt-8">
+      <li :for="learner in learners()" class="p-5 bg-surface border border-line rounded-2xl" :class="learner.status === 'revoked' ? 'opacity-70' : ''">
+        <div class="grid gap-4 grid-cols-1 md:grid-cols-12 md:items-center">
+          <div class="md:col-span-4 min-w-0">
+            <p class="font-medium text-ink truncate">{{ learner.name }}</p>
+            <p class="text-muted text-sm truncate">{{ learner.email }}</p>
+          </div>
+          <div class="md:col-span-4">
+            <p class="text-ink text-sm"><span class="font-semibold tabular-nums">{{ learner.percent }}%</span>, {{ learner.completed }} of {{ learner.total }} lessons</p>
+            <div class="overflow-hidden mt-2 h-1.5 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="learner.percent" :aria-label="'Progress of ' + learner.name">
+              <div class="h-full bg-accent rounded-full" :style="`width: ${learner.percent}%`"></div>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 items-center md:col-span-4 md:justify-end">
+            <p class="text-muted text-sm">{{ statusText(learner) }}</p>
+            <a :href="'/certificates/' + learner.certificate" class="inline-flex items-center px-3 h-9 text-ink text-sm hover:bg-tint rounded-full" :hidden="!learner.certificate">Certificate</a>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-muted text-sm hover:text-ink rounded-full" :hidden="learner.status === 'revoked'" :disabled="busy()" @click="remove(learner.enrollmentId)">{{ pendingRemove() === learner.enrollmentId ? 'Really remove access?' : 'Remove access' }}</button>
+            <button type="button" class="inline-flex items-center px-3 h-9 font-medium text-ink text-sm hover:bg-tint rounded-full" :hidden="learner.status !== 'revoked'" :disabled="busy()" @click="restore(learner.enrollmentId)">Restore access</button>
+          </div>
+        </div>
+        <ul class="flex flex-col gap-1 mt-4 pt-4 border-line border-t" :hidden="quizzes().length === 0">
+          <li :for="result in results(learner)" class="flex flex-wrap gap-x-3 gap-y-1 items-center text-sm">
+            <span class="shrink-0 size-4" :class="result.passed ? 'i-hugeicons-checkmark-circle-02 text-accent' : 'i-hugeicons-quiz-01 text-muted'" aria-hidden="true"></span>
+            <span class="text-ink">{{ result.title }}</span>
+            <span class="tabular-nums text-muted">{{ result.text }}</span>
+            <button type="button" class="inline-flex items-center px-3 h-9 text-ink text-sm hover:bg-tint rounded-full" :hidden="!result.canReopen" :disabled="busy()" @click="reopen(result.lessonId, learner.enrollmentId)">Give attempts back</button>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+</div>
+</template>
+@endsection

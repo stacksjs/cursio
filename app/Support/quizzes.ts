@@ -9,7 +9,7 @@ import type { EnrollmentRow, LearnerProgress } from './enrollment'
 import type { AnswerKey, GradableQuestion, QuestionDraft, QuestionKind } from './grading'
 import { db } from '@stacksjs/database'
 import { completeLesson, enrollmentOf, progressOf, utc } from './enrollment'
-import { attemptsLeft, choiceKinds, deadlineOf, gradeAttempt, isLate, parseAccepted, questionProblem, shuffled } from './grading'
+import { attemptsLeft, choiceKinds, countsAsUsed, deadlineOf, gradeAttempt, isLate, parseAccepted, questionProblem, shuffled } from './grading'
 import { isPermutation } from './progress'
 
 export class QuizError extends Error {}
@@ -219,7 +219,7 @@ export interface AttemptRow {
   quiz_id: number
   user_id: number
   enrollment_id: number
-  status: 'open' | 'submitted' | 'expired'
+  status: 'open' | 'submitted' | 'expired' | 'voided'
   score_points: number
   max_points: number
   percent: number
@@ -234,9 +234,27 @@ function attemptFrom(row: Record<string, unknown>): AttemptRow {
   return { ...(row as unknown as AttemptRow), passed: Boolean(row.passed) }
 }
 
+/** A Learner's Attempts that still count. Voided ones were given back by staff. */
 async function attemptsOf(quizId: number, enrollmentId: number): Promise<AttemptRow[]> {
   const rows = await db.selectFrom('quiz_attempts').select([...attemptColumns]).where('quiz_id', '=', quizId).where('enrollment_id', '=', enrollmentId).orderBy('id', 'asc').execute() as Record<string, unknown>[]
-  return rows.map(attemptFrom)
+  return rows.map(attemptFrom).filter(attempt => countsAsUsed(attempt.status))
+}
+
+/**
+ * Give a Learner their Attempts back: every Attempt they did not pass is
+ * voided, so it stays on record but no longer counts against the limit. A
+ * passed Attempt is left alone; there is nothing to reopen once it is passed.
+ */
+export async function reopenQuiz(course: CourseRow, lessonId: number, enrollmentId: number): Promise<number> {
+  const quiz = await quizInCourse(course, lessonId)
+  const enrollment = await db.selectFrom('enrollments').select(['id']).where('id', '=', enrollmentId).where('course_id', '=', course.id).executeTakeFirst()
+  if (!enrollment)
+    throw new QuizError('That learner is not enrolled in this course.')
+
+  const spent = (await attemptsOf(quiz.id, enrollmentId)).filter(attempt => !attempt.passed)
+  if (spent.length > 0)
+    await db.updateTable('quiz_attempts').set({ status: 'voided', updated_at: now() }).where('id', 'in', spent.map(attempt => attempt.id)).execute()
+  return spent.length
 }
 
 /** A question as a Learner sees it before answering: no key, no flags. */
@@ -439,7 +457,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
   const { enrollment } = await sittingOf(userId, quiz.lesson_id, at)
 
   if (attempt.status !== 'open')
-    throw new QuizError(attempt.status === 'expired' ? 'Time ran out on this attempt.' : 'This attempt was already submitted.')
+    throw new QuizError(attempt.status === 'expired' ? 'Time ran out on this attempt.' : (attempt.status === 'voided' ? 'This attempt was closed by your instructor. Start a new one.' : 'This attempt was already submitted.'))
 
   const stamp = at.toISOString()
   if (isLate(deadlineOf(utc(attempt.started_at), quiz.time_limit_seconds), at)) {

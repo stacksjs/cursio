@@ -25,3 +25,6 @@ route.post('/courses/{id}/lessons/{lesson}/quiz/questions', 'Actions/Studio/Save
 route.post('/courses/{id}/lessons/{lesson}/quiz/reorder', 'Actions/Studio/ReorderQuestionsAction')
 route.patch('/courses/{id}/lessons/{lesson}/quiz/questions/{question}', 'Actions/Studio/SaveQuestionAction')
 route.delete('/courses/{id}/lessons/{lesson}/quiz/questions/{question}', 'Actions/Studio/DeleteQuestionAction')
+route.post('/courses/{id}/lessons/{lesson}/quiz/reopen', 'Actions/Studio/ReopenQuizAction')
+route.get('/courses/{id}/gradebook', 'Actions/Studio/GradebookAction')
+route.post('/courses/{id}/enrollments/{enrollment}/access', 'Actions/Studio/SetAccessAction')

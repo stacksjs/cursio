@@ -33,7 +33,7 @@ export default defineModel({
       required: true,
       default: 'open',
       order: 1,
-      validation: { rule: schema.enum(['open', 'submitted', 'expired']) },
+      validation: { rule: schema.enum(['open', 'submitted', 'expired', 'voided']) },
       factory: () => 'open',
     },
 

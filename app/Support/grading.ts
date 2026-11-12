@@ -227,3 +227,59 @@ export function questionProblem(draft: QuestionDraft): string | null {
     return right === 1 ? null : 'Mark exactly one answer as correct.'
   return right >= 1 ? null : 'Mark at least one answer as correct.'
 }
+
+export interface AttemptFact {
+  quizId: number
+  enrollmentId: number
+  status: string
+  percent: number
+  passed: boolean
+}
+
+export interface QuizStanding {
+  /** Attempts that count: submitted or expired, not open and not voided. */
+  attempts: number
+  /** The best percent among them. Null when there is none yet. */
+  best: number | null
+  passed: boolean
+}
+
+/** Attempts that use up a Learner's allowance. A voided one was given back. */
+export function countsAsUsed(status: string): boolean {
+  return status !== 'voided'
+}
+
+/**
+ * Each Learner's standing on each Quiz, keyed `enrollmentId:quizId`. The best
+ * attempt is what a gradebook shows: a later, worse try does not lower it.
+ */
+export function standings(attempts: AttemptFact[]): Map<string, QuizStanding> {
+  const result = new Map<string, QuizStanding>()
+  for (const attempt of attempts) {
+    if (attempt.status !== 'submitted' && attempt.status !== 'expired')
+      continue
+    const key = `${attempt.enrollmentId}:${attempt.quizId}`
+    const standing = result.get(key) ?? { attempts: 0, best: null, passed: false }
+    standing.attempts++
+    standing.best = Math.max(standing.best ?? 0, attempt.percent)
+    standing.passed = standing.passed || attempt.passed
+    result.set(key, standing)
+  }
+  return result
+}
+
+/**
+ * Rows as CSV text. Every cell is quoted, and a cell a spreadsheet would run
+ * as a formula (it starts with = + - @, or a tab or return) is prefixed with
+ * an apostrophe: a Learner chooses their own name, and it lands in a file the
+ * Academy's staff open.
+ */
+export function toCsv(rows: (string | number | null | undefined)[][]): string {
+  const cell = (value: string | number | null | undefined): string => {
+    let text = value === null || value === undefined ? '' : String(value)
+    if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text))
+      text = `'${text}`
+    return `"${text.replace(/"/g, '""')}"`
+  }
+  return `${rows.map(row => row.map(cell).join(',')).join('\r\n')}\r\n`
+}

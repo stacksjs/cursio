@@ -162,7 +162,10 @@ onMount(load)
         <h1 class="font-semibold text-3xl text-ink tracking-tight">{{ course()?.title }}</h1>
         <p class="mt-1 text-muted text-sm">{{ published() ? 'Published' : 'Draft' }}, {{ lessonCount() }} {{ lessonCount() === 1 ? 'lesson' : 'lessons' }}</p>
       </div>
-      <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full disabled:opacity-60" :disabled="busy()" @click="togglePublish()">{{ published() ? 'Return to draft' : 'Publish course' }}</button>
+      <div class="flex flex-wrap gap-2 items-center">
+        <a :href="'/studio/courses/' + editingId + '/learners'" class="inline-flex items-center px-5 h-11 font-medium text-ink whitespace-nowrap hover:bg-tint border border-line rounded-full transition-colors">Learners</a>
+        <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full disabled:opacity-60" :disabled="busy()" @click="togglePublish()">{{ published() ? 'Return to draft' : 'Publish course' }}</button>
+      </div>
     </div>
 
     <fieldset class="mt-6">

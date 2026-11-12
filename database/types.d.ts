@@ -1469,7 +1469,7 @@ declare module '@stacksjs/database' {
       uuid: string
       created_at: string
       updated_at: string | null
-      status: "open" | "submitted" | "expired"
+      status: "open" | "submitted" | "expired" | "voided"
       score_points: number
       max_points: number
       percent: number

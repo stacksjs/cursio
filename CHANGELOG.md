@@ -1,5 +1,15 @@
 # Cursio Changelog
 
+[Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.1...v0.1.2)
+
+## ✨ Features
+
+- points and badges, worked out from what a learner has done ([0626cc0](https://github.com/stacksjs/cursio/commit/0626cc0)) _(by Chris)_
+
+## Contributors
+
+- _Chris_
+
 ## ✨ Features
 
 - question banks, so each quiz attempt can draw a different set of questions ([3995b45](https://github.com/stacksjs/cursio/commit/3995b45)) _(by Chris)_

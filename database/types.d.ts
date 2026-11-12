@@ -46,6 +46,19 @@ declare module '@stacksjs/database' {
       currency: string
       properties: string
     }
+    assignments: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      max_points: number
+      pass_points: number
+      rubric: string
+      team_id: number
+      course_id: number
+      lesson_id: number
+    }
     attempt_answers: {
       // columns
       id: number
@@ -950,7 +963,7 @@ declare module '@stacksjs/database' {
       created_at: string
       updated_at: string | null
       title: string
-      kind: "video" | "reading" | "quiz"
+      kind: "video" | "reading" | "quiz" | "assignment"
       body: string
       video_url: string
       duration_seconds: number
@@ -1746,6 +1759,25 @@ declare module '@stacksjs/database' {
       disk: string
       path: string
       favorite: number
+    }
+    submissions: {
+      // columns
+      id: number
+      uuid: string
+      created_at: string
+      updated_at: string | null
+      body: string
+      link: string
+      status: "submitted" | "passed" | "returned"
+      score: number
+      rubric_scores: string
+      feedback: string
+      submitted_at: string
+      graded_at: string
+      graded_by: number
+      user_id: number
+      assignment_id: number
+      enrollment_id: number
     }
     subscriber_emails: {
       // columns

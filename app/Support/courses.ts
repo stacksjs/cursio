@@ -95,7 +95,14 @@ export async function addSection(course: CourseRow, input: { title: string }): P
   return { id: row.id, title, position }
 }
 
-export const lessonKinds = ['video', 'reading', 'quiz'] as const
+export const lessonKinds = ['video', 'reading', 'quiz', 'assignment'] as const
+
+/**
+ * Kinds a Learner completes by earning it (passing a Quiz, having an Assignment
+ * marked as passed) rather than by pressing a button. Each has a row of its own
+ * made with the Lesson, so the kind is fixed at creation.
+ */
+export const earnedKinds: readonly string[] = ['quiz', 'assignment']
 export type LessonKind = typeof lessonKinds[number]
 
 export async function addLesson(course: CourseRow, input: { sectionId: number, title: string, kind?: string, body?: string, videoUrl?: string, durationSeconds?: number, unlockAfterDays?: number | null, isPreview?: boolean }): Promise<OutlineLesson> {
@@ -131,7 +138,7 @@ export async function addLesson(course: CourseRow, input: { sectionId: number, t
     video_url: videoUrl,
     duration_seconds: durationSeconds,
     unlock_after_days: unlockDays(input.unlockAfterDays),
-    is_preview: kind !== 'quiz' && Boolean(input.isPreview),
+    is_preview: !earnedKinds.includes(kind) && Boolean(input.isPreview),
     position,
     uuid: crypto.randomUUID(),
   }).returning(['id']).executeTakeFirst() as { id: number }
@@ -140,8 +147,10 @@ export async function addLesson(course: CourseRow, input: { sectionId: number, t
   // is never a quiz Lesson with nothing behind it.
   if (kind === 'quiz')
     await db.insertInto('quizzes').values({ team_id: course.team_id, course_id: course.id, lesson_id: row.id, uuid: crypto.randomUUID() }).execute()
+  if (kind === 'assignment')
+    await db.insertInto('assignments').values({ team_id: course.team_id, course_id: course.id, lesson_id: row.id, uuid: crypto.randomUUID() }).execute()
 
-  return { id: row.id, course_section_id: input.sectionId, title, kind, duration_seconds: durationSeconds, position, unlock_after_days: unlockDays(input.unlockAfterDays), is_preview: kind !== 'quiz' && Boolean(input.isPreview) }
+  return { id: row.id, course_section_id: input.sectionId, title, kind, duration_seconds: durationSeconds, position, unlock_after_days: unlockDays(input.unlockAfterDays), is_preview: !earnedKinds.includes(kind) && Boolean(input.isPreview) }
 }
 
 /** The Course's Sections and Lessons in teaching order. */
@@ -276,8 +285,8 @@ export async function updateLesson(course: CourseRow, lessonId: number, input: {
   if (!lessonKinds.includes(kind))
     throw new CourseError('That lesson type is not supported yet.')
   // The Quiz row is made with the Lesson, so the type is fixed at creation.
-  if ((kind === 'quiz') !== (lesson.kind === 'quiz'))
-    throw new CourseError('A quiz cannot become another lesson type, or the other way round. Add a new lesson instead.')
+  if (kind !== lesson.kind && (earnedKinds.includes(kind) || earnedKinds.includes(lesson.kind)))
+    throw new CourseError('A quiz or an assignment cannot become another lesson type, or the other way round. Add a new lesson instead.')
   if (kind === 'video' && !videoUrl)
     throw new CourseError('A video lesson needs a video.')
   if (videoUrl && !/^https:\/\//.test(videoUrl))
@@ -291,7 +300,7 @@ export async function updateLesson(course: CourseRow, lessonId: number, input: {
     video_url: videoUrl,
     duration_seconds: input.durationSeconds !== undefined ? Math.max(0, Math.round(Number(input.durationSeconds) || 0)) : lesson.duration_seconds,
     unlock_after_days: input.unlockAfterDays !== undefined ? unlockDays(input.unlockAfterDays) : (lesson.unlock_after_days ?? null),
-    is_preview: kind !== 'quiz' && Boolean(input.isPreview !== undefined ? input.isPreview : lesson.is_preview),
+    is_preview: !earnedKinds.includes(kind) && Boolean(input.isPreview !== undefined ? input.isPreview : lesson.is_preview),
   }
 
   await db.updateTable('lessons').set({
@@ -315,6 +324,7 @@ export async function updateLesson(course: CourseRow, lessonId: number, input: {
 export async function deleteLesson(course: CourseRow, lessonId: number): Promise<void> {
   await lessonOf(course, lessonId)
   await deleteQuizzesOf([lessonId])
+  await deleteAssignmentsOf([lessonId])
   await db.deleteFrom('lesson_progress').where('lesson_id', '=', lessonId).execute()
   await db.deleteFrom('lessons').where('id', '=', lessonId).execute()
 }
@@ -343,12 +353,23 @@ async function deleteQuizzesOf(lessonIds: number[]): Promise<void> {
   await db.deleteFrom('quizzes').where('id', 'in', quizIds).execute()
 }
 
+/** The same for Assignments: their Submissions go first. */
+async function deleteAssignmentsOf(lessonIds: number[]): Promise<void> {
+  const assignments = await db.selectFrom('assignments').select(['id']).where('lesson_id', 'in', lessonIds).execute() as { id: number }[]
+  if (assignments.length === 0)
+    return
+  const ids = assignments.map(row => row.id)
+  await db.deleteFrom('submissions').where('assignment_id', 'in', ids).execute()
+  await db.deleteFrom('assignments').where('id', 'in', ids).execute()
+}
+
 /** Remove a Section and every Lesson in it. */
 export async function deleteSection(course: CourseRow, sectionId: number): Promise<void> {
   await sectionOf(course, sectionId)
   const lessons = await db.selectFrom('lessons').select(['id']).where('course_section_id', '=', sectionId).execute() as { id: number }[]
   if (lessons.length > 0) {
     await deleteQuizzesOf(lessons.map(row => row.id))
+    await deleteAssignmentsOf(lessons.map(row => row.id))
     await db.deleteFrom('lesson_progress').where('lesson_id', 'in', lessons.map(row => row.id)).execute()
     await db.deleteFrom('lessons').where('course_section_id', '=', sectionId).execute()
   }

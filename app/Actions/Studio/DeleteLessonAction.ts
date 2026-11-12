@@ -1,7 +1,7 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
-import { courseInAcademy, deleteLesson } from '../../Support/courses'
-import { idParam, refusal, staffContext } from '../../Support/http'
+import { deleteLesson } from '../../Support/courses'
+import { idParam, refusal, studioCourse } from '../../Support/http'
 
 export default new Action({
   name: 'DeleteLesson',
@@ -9,13 +9,10 @@ export default new Action({
   method: 'DELETE',
 
   async handle(request: RequestInstance) {
-    const context = await staffContext(request)
+    const context = await studioCourse(request)
     if (context instanceof Response)
       return context
-
-    const course = await courseInAcademy(context.academy, idParam(request, 'id'))
-    if (!course)
-      return response.notFound('Course not found')
+    const course = context.course
 
     try {
       await deleteLesson(course, idParam(request, 'lesson'))

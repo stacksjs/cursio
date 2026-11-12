@@ -1,0 +1,133 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+const pageTitle = 'Assignment - Cursio Studio'
+const courseId = typeof id !== 'undefined' ? Number(id) : 0
+const lessonId = typeof lesson !== 'undefined' ? Number(lesson) : 0
+</script>
+<script client>
+import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
+
+const courseHome = `/studio/courses/{{ courseId }}`
+const base = `/api/studio/courses/{{ courseId }}/lessons/{{ lessonId }}/assignment`
+
+const loading = state(true)
+const loaded = state(false)
+const problem = state('')
+const saved = state('')
+const busy = state(false)
+const maxPoints = state('100')
+const passPoints = state('50')
+// Typed text lives in `rows`; `criteria` is redrawn only when a row is added
+// or removed, so typing never redraws the row being typed in.
+let rows = []
+const criteria = state([])
+
+const total = derived(() => criteria().reduce((sum, row) => sum + (Number(row.points) || 0), 0))
+const hasRubric = derived(() => criteria().some(row => row.title.trim() !== ''))
+
+function draw() {
+  criteria.set(rows.map(row => ({ ...row })))
+}
+
+function setRow(index, field, value) {
+  if (!rows[index])
+    return
+  rows[index][field] = field === 'points' ? (Number(value) || 0) : value
+  // Points feed the total, which is shown: redraw for those, not for names.
+  if (field === 'points')
+    draw()
+}
+
+function addRow() {
+  if (rows.length < 20) {
+    rows.push({ title: '', points: 10 })
+    draw()
+  }
+}
+
+function removeRow(index) {
+  rows.splice(index, 1)
+  draw()
+}
+
+async function load() {
+  try {
+    const data = await dashboardApi(base)
+    maxPoints.set(String(data.assignment.max_points))
+    passPoints.set(String(data.assignment.pass_points))
+    rows = data.assignment.rubric.map(row => ({ ...row }))
+    draw()
+    loaded.set(true)
+  }
+  catch (error) {
+    problem.set(error?.status === 401 ? 'Sign in to edit this assignment.' : (error?.message || 'This assignment could not be loaded.'))
+  }
+  loading.set(false)
+}
+
+async function save() {
+  busy.set(true)
+  problem.set('')
+  saved.set('')
+  try {
+    // Names are read from `rows`: a name typed since the last redraw is there
+    // and not yet in `criteria`.
+    await dashboardApi(base, { method: 'PATCH', body: { rubric: rows, max_points: Number(maxPoints()), pass_points: Number(passPoints()) } })
+    await load()
+    saved.set('Saved.')
+  }
+  catch (error) {
+    problem.set(error?.message || 'That did not save.')
+  }
+  busy.set(false)
+}
+
+onMount(load)
+</script>
+<template>
+<div data-stx-content>
+  <a :href="courseHome" class="text-muted text-sm hover:text-ink">Back to the course</a>
+
+  <p class="mt-6 text-muted" :hidden="!loading()">Loading the assignment.</p>
+  <p class="mt-6 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+
+  <form class="mt-4" :hidden="!loaded()" hidden @submit.prevent="save()">
+    <h1 class="font-semibold text-3xl text-ink tracking-tight">How it is marked</h1>
+    <p class="mt-2 max-w-[60ch] text-muted">The brief learners read is the lesson's content. Here you decide what a marker scores and what counts as passing.</p>
+
+    <fieldset class="mt-8 p-6 bg-surface border border-line rounded-2xl">
+      <legend class="px-2 font-medium text-ink">Rubric</legend>
+      <p class="text-muted text-sm">Optional. Each criterion gets its own score, and the total is their sum. Leave it empty to give one overall score.</p>
+      <ul class="flex flex-col gap-2 mt-4">
+        <li :for="(row, index) in criteria()" class="flex gap-2 items-center">
+          <input type="text" class="flex-1 px-4 h-11 min-w-0 text-ink bg-page border border-line rounded-xl" :aria-label="'Criterion ' + (index + 1)" :value="row.title" @input="setRow(index, 'title', $event.target.value)">
+          <input type="number" min="1" max="100" class="px-3 h-11 w-24 tabular-nums text-ink bg-page border border-line rounded-xl" :aria-label="'Points for criterion ' + (index + 1)" :value="row.points" @change="setRow(index, 'points', $event.target.value)">
+          <button type="button" class="inline-flex items-center justify-center shrink-0 size-11 text-muted hover:text-ink rounded-full" :aria-label="'Remove criterion ' + (index + 1)" @click="removeRow(index)"><span class="size-4 i-hugeicons-delete-02" aria-hidden="true"></span></button>
+        </li>
+      </ul>
+      <div class="flex flex-wrap gap-4 items-center mt-4">
+        <button type="button" class="inline-flex items-center px-4 h-10 text-ink text-sm border border-line rounded-full" :hidden="criteria().length >= 20" @click="addRow()">Add a criterion</button>
+        <p class="tabular-nums text-muted text-sm" :hidden="criteria().length === 0">Total: {{ total() }} points</p>
+      </div>
+    </fieldset>
+
+    <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 mt-6 max-w-md">
+      <div :hidden="hasRubric()">
+        <label for="assignment-max" class="block font-medium text-ink text-sm">Maximum points</label>
+        <input id="assignment-max" x-model="maxPoints" type="number" min="1" max="1000" class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+      </div>
+      <div>
+        <label for="assignment-pass" class="block font-medium text-ink text-sm">Points to pass</label>
+        <input id="assignment-pass" x-model="passPoints" type="number" min="0" max="1000" required class="mt-2 px-4 h-11 w-full text-ink bg-surface border border-line rounded-xl">
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-4 items-center mt-6">
+      <button type="submit" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">Save</button>
+      <p class="text-muted text-sm" role="status" x-text="saved()"></p>
+    </div>
+  </form>
+</div>
+</template>
+@endsection

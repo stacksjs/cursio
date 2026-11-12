@@ -1,0 +1,168 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+const pageTitle = 'Marking - Cursio Studio'
+const courseId = typeof id !== 'undefined' ? Number(id) : 0
+</script>
+<script client>
+import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
+
+const courseHome = `/studio/courses/{{ courseId }}`
+const base = `/api/studio/courses/{{ courseId }}/submissions`
+
+const loading = state(true)
+const loaded = state(false)
+const problem = state('')
+const busy = state(false)
+const submissions = state([])
+const openId = state(0)
+// The mark being written, kept out of signals so typing redraws nothing.
+let scores = []
+let overall = ''
+let feedback = ''
+const running = state(0)
+
+const waiting = derived(() => submissions().filter(entry => entry.status === 'submitted').length)
+const open = derived(() => submissions().find(entry => entry.id === openId()) || null)
+
+function day(stamp) {
+  if (!stamp)
+    return ''
+  const date = new Date(/[zZ]$/.test(stamp) ? stamp : `${stamp.replace(' ', 'T')}Z`)
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function statusText(entry) {
+  if (entry.status === 'passed')
+    return `Passed, ${entry.score} of ${entry.maxPoints}`
+  if (entry.status === 'returned')
+    return `Returned, ${entry.score} of ${entry.maxPoints}`
+  return `Handed in ${day(entry.submitted_at)}`
+}
+
+async function load() {
+  try {
+    const data = await dashboardApi(base)
+    submissions.set(data.submissions)
+    loaded.set(true)
+  }
+  catch (error) {
+    problem.set(error?.status === 401 ? 'Sign in to mark this course.' : (error?.message || 'The work could not be loaded.'))
+  }
+  loading.set(false)
+}
+
+function pick(entry) {
+  problem.set('')
+  scores = entry.rubric.map((criterion, index) => entry.rubric_scores[index] ?? '')
+  overall = entry.score ?? ''
+  feedback = entry.feedback || ''
+  running.set(scores.reduce((sum, value) => sum + (Number(value) || 0), 0))
+  openId.set(entry.id)
+}
+
+function setScore(index, value) {
+  scores[index] = value
+  running.set(scores.reduce((sum, item) => sum + (Number(item) || 0), 0))
+}
+
+function setOverall(value) {
+  overall = value
+}
+
+function setFeedback(value) {
+  feedback = value
+}
+
+async function mark() {
+  const entry = open()
+  if (!entry)
+    return
+  busy.set(true)
+  problem.set('')
+  try {
+    const body = entry.rubric.length > 0
+      ? { scores: scores.map(value => value === '' ? Number.NaN : Number(value)), feedback }
+      : { score: overall === '' ? '' : Number(overall), feedback }
+    await dashboardApi(`${base}/${entry.id}/mark`, { method: 'POST', body })
+    openId.set(0)
+    await load()
+  }
+  catch (error) {
+    problem.set(error?.message || 'The mark did not save.')
+  }
+  busy.set(false)
+}
+
+onMount(load)
+</script>
+<template>
+<div data-stx-content>
+  <a :href="courseHome" class="text-muted text-sm hover:text-ink">Back to the course</a>
+
+  <p class="mt-6 text-muted" :hidden="!loading()">Loading handed-in work.</p>
+
+  <div :hidden="!loaded()" hidden>
+    <h1 class="mt-4 font-semibold text-3xl text-ink tracking-tight">Marking</h1>
+    <p class="mt-1 text-muted text-sm">{{ waiting() }} waiting, {{ submissions().length }} handed in</p>
+
+    <p class="mt-8 p-6 text-muted bg-tint rounded-2xl" :hidden="submissions().length > 0">Nothing has been handed in yet.</p>
+
+    <div class="grid gap-8 grid-cols-1 lg:grid-cols-12 mt-8">
+      <ul class="flex flex-col gap-2 lg:col-span-5">
+        <li :for="entry in submissions()">
+          <button type="button" class="flex flex-col gap-1 p-4 w-full text-left border rounded-2xl transition-colors" :class="openId() === entry.id ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-tint'" @click="pick(entry)">
+            <span class="font-medium text-ink">{{ entry.learnerName }}</span>
+            <span class="text-muted text-sm">{{ entry.lessonTitle }}</span>
+            <span class="text-xs" :class="entry.status === 'submitted' ? 'font-medium text-accent' : 'text-muted'">{{ statusText(entry) }}</span>
+          </button>
+        </li>
+      </ul>
+
+      <div class="lg:col-span-7">
+        <p class="p-6 text-muted bg-tint rounded-2xl" :hidden="open() !== null || submissions().length === 0">Pick a piece of work to read and mark it.</p>
+        <article class="p-6 bg-surface border border-line rounded-2xl" :hidden="open() === null" hidden>
+          <h2 class="font-semibold text-ink text-xl tracking-tight">{{ open()?.learnerName }}</h2>
+          <p class="text-muted text-sm">{{ open()?.lessonTitle }}, {{ open()?.learnerEmail }}</p>
+
+          <p class="mt-5 max-w-[70ch] leading-relaxed text-ink whitespace-pre-line" :hidden="!open()?.body">{{ open()?.body || '' }}</p>
+          <p class="mt-4 text-sm" :hidden="!open()?.link">
+            <a :href="open()?.link || '#'" target="_blank" rel="noopener noreferrer nofollow" class="break-all text-accent underline underline-offset-4">{{ open()?.link || '' }}</a>
+          </p>
+
+          <form class="mt-6 pt-6 border-line border-t" :hidden="open()?.status === 'passed'" @submit.prevent="mark()">
+            <ul class="flex flex-col gap-3" :hidden="(open()?.rubric.length || 0) === 0">
+              <li :for="(criterion, index) in open()?.rubric || []" class="flex gap-3 items-center">
+                <span class="flex-1 text-ink text-sm">{{ criterion.title }}</span>
+                <input type="number" min="0" :max="criterion.points" required class="px-3 h-11 w-24 tabular-nums text-ink bg-page border border-line rounded-xl" :aria-label="'Score for ' + criterion.title" :value="open()?.rubric_scores[index] ?? ''" @input="setScore(index, $event.target.value)">
+                <span class="w-16 tabular-nums text-muted text-sm">of {{ criterion.points }}</span>
+              </li>
+            </ul>
+            <p class="mt-3 tabular-nums text-ink text-sm" :hidden="(open()?.rubric.length || 0) === 0">Total {{ running() }} of {{ open()?.maxPoints }}, {{ open()?.passPoints }} to pass</p>
+
+            <div class="max-w-xs" :hidden="(open()?.rubric.length || 0) > 0">
+              <label for="mark-score" class="block font-medium text-ink text-sm">Score</label>
+              <input id="mark-score" type="number" min="0" :max="open()?.maxPoints" class="mt-2 px-4 h-11 w-full tabular-nums text-ink bg-page border border-line rounded-xl" aria-describedby="mark-score-help" :value="open()?.score ?? ''" @input="setOverall($event.target.value)">
+              <p id="mark-score-help" class="mt-2 text-muted text-sm">Out of {{ open()?.maxPoints }}, {{ open()?.passPoints }} to pass.</p>
+            </div>
+
+            <div class="mt-4">
+              <label for="mark-feedback" class="block font-medium text-ink text-sm">Feedback</label>
+              <textarea id="mark-feedback" rows="4" class="mt-2 px-4 py-3 w-full text-ink bg-page border border-line rounded-xl" :value="open()?.feedback || ''" @input="setFeedback($event.target.value)"></textarea>
+            </div>
+
+            <p class="mt-4 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+            <button type="submit" class="inline-flex items-center mt-5 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">Save the mark</button>
+          </form>
+
+          <div class="mt-6 p-4 bg-accent-soft rounded-xl" :hidden="open()?.status !== 'passed'">
+            <p class="font-medium text-ink">Passed with {{ open()?.score }} of {{ open()?.maxPoints }}</p>
+            <p class="mt-1 text-ink text-sm whitespace-pre-line" :hidden="!open()?.feedback">{{ open()?.feedback || '' }}</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </div>
+</div>
+</template>
+@endsection

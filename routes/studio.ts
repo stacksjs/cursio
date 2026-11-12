@@ -29,3 +29,7 @@ route.delete('/courses/{id}/lessons/{lesson}/quiz/questions/{question}', 'Action
 route.post('/courses/{id}/lessons/{lesson}/quiz/reopen', 'Actions/Studio/ReopenQuizAction')
 route.get('/courses/{id}/gradebook', 'Actions/Studio/GradebookAction')
 route.post('/courses/{id}/enrollments/{enrollment}/access', 'Actions/Studio/SetAccessAction')
+route.get('/courses/{id}/lessons/{lesson}/assignment', 'Actions/Studio/AssignmentShowAction')
+route.patch('/courses/{id}/lessons/{lesson}/assignment', 'Actions/Studio/UpdateAssignmentAction')
+route.get('/courses/{id}/submissions', 'Actions/Studio/SubmissionsAction')
+route.post('/courses/{id}/submissions/{submission}/mark', 'Actions/Studio/MarkSubmissionAction')

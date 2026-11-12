@@ -1,7 +1,7 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
-import { courseInAcademy, renameSection } from '../../Support/courses'
-import { idParam, refusal, sent, staffContext } from '../../Support/http'
+import { renameSection } from '../../Support/courses'
+import { idParam, refusal, sent, studioCourse } from '../../Support/http'
 
 export default new Action({
   name: 'UpdateSection',
@@ -9,13 +9,10 @@ export default new Action({
   method: 'PATCH',
 
   async handle(request: RequestInstance) {
-    const context = await staffContext(request)
+    const context = await studioCourse(request)
     if (context instanceof Response)
       return context
-
-    const course = await courseInAcademy(context.academy, idParam(request, 'id'))
-    if (!course)
-      return response.notFound('Course not found')
+    const course = context.course
 
     try {
       await renameSection(course, idParam(request, 'section'), sent(request, 'title') ?? '')

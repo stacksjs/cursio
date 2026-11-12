@@ -1,7 +1,7 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
-import { courseInAcademy, lessonsForStudio, outlineOf } from '../../Support/courses'
-import { idParam, staffContext } from '../../Support/http'
+import { lessonsForStudio, outlineOf } from '../../Support/courses'
+import { studioCourse } from '../../Support/http'
 
 export default new Action({
   name: 'StudioCourseOutline',
@@ -9,13 +9,10 @@ export default new Action({
   method: 'GET',
 
   async handle(request: RequestInstance) {
-    const context = await staffContext(request)
+    const context = await studioCourse(request)
     if (context instanceof Response)
       return context
-
-    const course = await courseInAcademy(context.academy, idParam(request, 'id'))
-    if (!course)
-      return response.notFound('Course not found')
+    const course = context.course
 
     return response.json({ course, outline: await outlineOf(course.id), lessons: await lessonsForStudio(course.id) })
   },

@@ -45,7 +45,7 @@ export default defineModel({
       default: 'reading',
       order: 2,
       fillable: true,
-      validation: { rule: schema.enum(['video', 'reading', 'quiz']) },
+      validation: { rule: schema.enum(['video', 'reading', 'quiz', 'assignment']) },
       factory: () => 'reading',
     },
 

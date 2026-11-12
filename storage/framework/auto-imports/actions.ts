@@ -5,6 +5,7 @@
 // resolves. Values are paths rather than import thunks on purpose: thunks
 // would make every compilation that touches a name resolve every module.
 export const actions = {
+  'Actions/Learn/AssignmentShowAction': '../../../app/Actions/Learn/AssignmentShowAction.ts',
   'Actions/Learn/CatalogAction': '../../../app/Actions/Learn/CatalogAction.ts',
   'Actions/Learn/CompleteLessonAction': '../../../app/Actions/Learn/CompleteLessonAction.ts',
   'Actions/Learn/CourseProgressAction': '../../../app/Actions/Learn/CourseProgressAction.ts',
@@ -17,10 +18,12 @@ export const actions = {
   'Actions/Learn/SavePositionAction': '../../../app/Actions/Learn/SavePositionAction.ts',
   'Actions/Learn/StartAttemptAction': '../../../app/Actions/Learn/StartAttemptAction.ts',
   'Actions/Learn/SubmitAttemptAction': '../../../app/Actions/Learn/SubmitAttemptAction.ts',
+  'Actions/Learn/SubmitWorkAction': '../../../app/Actions/Learn/SubmitWorkAction.ts',
   'Actions/NotifyUser': '../../../app/Actions/NotifyUser.ts',
   'Actions/SendWelcomeEmail': '../../../app/Actions/SendWelcomeEmail.ts',
   'Actions/Studio/AddLessonAction': '../../../app/Actions/Studio/AddLessonAction.ts',
   'Actions/Studio/AddSectionAction': '../../../app/Actions/Studio/AddSectionAction.ts',
+  'Actions/Studio/AssignmentShowAction': '../../../app/Actions/Studio/AssignmentShowAction.ts',
   'Actions/Studio/CourseOutlineAction': '../../../app/Actions/Studio/CourseOutlineAction.ts',
   'Actions/Studio/CreateAcademyAction': '../../../app/Actions/Studio/CreateAcademyAction.ts',
   'Actions/Studio/CreateCourseAction': '../../../app/Actions/Studio/CreateCourseAction.ts',
@@ -28,6 +31,7 @@ export const actions = {
   'Actions/Studio/DeleteQuestionAction': '../../../app/Actions/Studio/DeleteQuestionAction.ts',
   'Actions/Studio/DeleteSectionAction': '../../../app/Actions/Studio/DeleteSectionAction.ts',
   'Actions/Studio/GradebookAction': '../../../app/Actions/Studio/GradebookAction.ts',
+  'Actions/Studio/MarkSubmissionAction': '../../../app/Actions/Studio/MarkSubmissionAction.ts',
   'Actions/Studio/PublishCourseAction': '../../../app/Actions/Studio/PublishCourseAction.ts',
   'Actions/Studio/QuizShowAction': '../../../app/Actions/Studio/QuizShowAction.ts',
   'Actions/Studio/ReopenQuizAction': '../../../app/Actions/Studio/ReopenQuizAction.ts',
@@ -36,7 +40,9 @@ export const actions = {
   'Actions/Studio/SaveQuestionAction': '../../../app/Actions/Studio/SaveQuestionAction.ts',
   'Actions/Studio/SetAccessAction': '../../../app/Actions/Studio/SetAccessAction.ts',
   'Actions/Studio/StudioOverviewAction': '../../../app/Actions/Studio/StudioOverviewAction.ts',
+  'Actions/Studio/SubmissionsAction': '../../../app/Actions/Studio/SubmissionsAction.ts',
   'Actions/Studio/UpdateAcademyAction': '../../../app/Actions/Studio/UpdateAcademyAction.ts',
+  'Actions/Studio/UpdateAssignmentAction': '../../../app/Actions/Studio/UpdateAssignmentAction.ts',
   'Actions/Studio/UpdateCourseAction': '../../../app/Actions/Studio/UpdateCourseAction.ts',
   'Actions/Studio/UpdateLessonAction': '../../../app/Actions/Studio/UpdateLessonAction.ts',
   'Actions/Studio/UpdateQuizAction': '../../../app/Actions/Studio/UpdateQuizAction.ts',

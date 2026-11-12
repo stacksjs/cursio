@@ -1,7 +1,7 @@
 import { Action } from '@stacksjs/actions'
 import { response } from '@stacksjs/router'
-import { courseInAcademy, outlineOf, reorderLessons, reorderSections } from '../../Support/courses'
-import { idList, idParam, refusal, staffContext } from '../../Support/http'
+import { outlineOf, reorderLessons, reorderSections } from '../../Support/courses'
+import { idList, refusal, studioCourse } from '../../Support/http'
 
 export default new Action({
   name: 'ReorderOutline',
@@ -9,13 +9,10 @@ export default new Action({
   method: 'POST',
 
   async handle(request: RequestInstance) {
-    const context = await staffContext(request)
+    const context = await studioCourse(request)
     if (context instanceof Response)
       return context
-
-    const course = await courseInAcademy(context.academy, idParam(request, 'id'))
-    if (!course)
-      return response.notFound('Course not found')
+    const course = context.course
 
     try {
       const sectionId = Number(request.get('section_id')) || 0

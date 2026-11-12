@@ -14438,7 +14438,8 @@
             "enumValues": [
               "video",
               "reading",
-              "quiz"
+              "quiz",
+              "assignment"
             ]
           },
           {
@@ -15394,10 +15395,300 @@
             "type": "unique"
           }
         ]
+      },
+      {
+        "table": "assignments",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": false
+          },
+          {
+            "name": "max_points",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": 100
+          },
+          {
+            "name": "pass_points",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": 50
+          },
+          {
+            "name": "rubric",
+            "type": "text",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "team_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "teams",
+              "column": "id"
+            }
+          },
+          {
+            "name": "course_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "courses",
+              "column": "id",
+              "onDelete": "cascade"
+            }
+          },
+          {
+            "name": "lesson_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "lessons",
+              "column": "id",
+              "onDelete": "cascade"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "datetime",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": "UTC_TIMESTAMP"
+          },
+          {
+            "name": "updated_at",
+            "type": "datetime",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "uuid",
+            "type": "string",
+            "isPrimaryKey": false,
+            "isUnique": true,
+            "isNullable": true,
+            "hasDefault": false
+          }
+        ],
+        "indexes": [
+          {
+            "name": "assignments_lesson_unique",
+            "columns": [
+              "lesson_id"
+            ],
+            "type": "unique"
+          },
+          {
+            "name": "assignments_uuid_unique",
+            "columns": [
+              "uuid"
+            ],
+            "type": "unique"
+          }
+        ]
+      },
+      {
+        "table": "submissions",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint",
+            "isPrimaryKey": true,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": false
+          },
+          {
+            "name": "body",
+            "type": "text",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "link",
+            "type": "text",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "status",
+            "type": "enum",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": "submitted",
+            "enumValues": [
+              "submitted",
+              "passed",
+              "returned"
+            ]
+          },
+          {
+            "name": "score",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "rubric_scores",
+            "type": "text",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "feedback",
+            "type": "text",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "submitted_at",
+            "type": "date",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "graded_at",
+            "type": "date",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "graded_by",
+            "type": "integer",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "user_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "users",
+              "column": "id",
+              "onDelete": "cascade"
+            }
+          },
+          {
+            "name": "assignment_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "assignments",
+              "column": "id",
+              "onDelete": "cascade"
+            }
+          },
+          {
+            "name": "enrollment_id",
+            "type": "bigint",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false,
+            "references": {
+              "table": "enrollments",
+              "column": "id",
+              "onDelete": "cascade"
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "datetime",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": false,
+            "hasDefault": true,
+            "defaultValue": "UTC_TIMESTAMP"
+          },
+          {
+            "name": "updated_at",
+            "type": "datetime",
+            "isPrimaryKey": false,
+            "isUnique": false,
+            "isNullable": true,
+            "hasDefault": false
+          },
+          {
+            "name": "uuid",
+            "type": "string",
+            "isPrimaryKey": false,
+            "isUnique": true,
+            "isNullable": true,
+            "hasDefault": false
+          }
+        ],
+        "indexes": [
+          {
+            "name": "submissions_assignment_enrollment_unique",
+            "columns": [
+              "assignment_id",
+              "enrollment_id"
+            ],
+            "type": "unique"
+          },
+          {
+            "name": "submissions_uuid_unique",
+            "columns": [
+              "uuid"
+            ],
+            "type": "unique"
+          }
+        ]
       }
     ]
   },
-  "hash": "096970a479ef595620cadb05ac1ec22f12869af5251d095b37ca6f67df41f4fd",
+  "hash": "c071b7ac4e3edce86201555f9126a10eb1336986caeb4081e837f500f06a9b20",
   "dialect": "sqlite",
-  "updatedAt": "2026-11-12T06:06:10.770Z"
+  "updatedAt": "2026-11-12T15:12:26.591Z"
 }

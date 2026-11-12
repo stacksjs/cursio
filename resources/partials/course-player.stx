@@ -49,6 +49,10 @@ const certificate = state('')
 
 // The quiz behind the open Lesson, when it is one.
 const quiz = state(null)
+// The assignment behind the open Lesson, when it is one, with the Learner's own work.
+const task = state(null)
+let workBody = ''
+let workLink = ''
 const attempt = state(null)
 const result = state(null)
 const reviewed = state([])
@@ -127,6 +131,7 @@ async function open(lessonId) {
   problem.set('')
   stopClock()
   quiz.set(null)
+  task.set(null)
   attempt.set(null)
   result.set(null)
   try {
@@ -139,6 +144,12 @@ async function open(lessonId) {
     }
     catch {
       // The address is a convenience; the episode opens either way.
+    }
+    if (data.lesson.kind === 'assignment') {
+      const brief = await dashboardApi(`/api/learn/lessons/${lessonId}/assignment`)
+      workBody = brief.assignment.submission?.body || ''
+      workLink = brief.assignment.submission?.link || ''
+      task.set(brief.assignment)
     }
     if (data.lesson.kind === 'quiz') {
       const sitting = await dashboardApi(`/api/learn/lessons/${lessonId}/quiz`)
@@ -325,6 +336,40 @@ function rightAnswer(question, review) {
   return question.options.filter(option => review.correctOptionIds.includes(option.id)).map(option => option.label).join(', ')
 }
 
+function setWork(field, value) {
+  if (field === 'body')
+    workBody = value
+  else
+    workLink = value
+}
+
+async function handIn() {
+  const lesson = openLesson()
+  if (!lesson)
+    return
+  busy.set(true)
+  problem.set('')
+  try {
+    const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/assignment/submit`, { method: 'POST', body: { body: workBody, link: workLink } })
+    task.set({ ...task(), submission: data.submission })
+  }
+  catch (error) {
+    problem.set(error?.message || 'Your work could not be handed in.')
+  }
+  busy.set(false)
+}
+
+function workStatus() {
+  const work = task()?.submission
+  if (!work)
+    return ''
+  if (work.status === 'passed')
+    return `Passed with ${work.score} of ${task().maxPoints}`
+  if (work.status === 'returned')
+    return `Returned with ${work.score} of ${task().maxPoints}. You can hand it in again.`
+  return 'Handed in. It is waiting to be marked.'
+}
+
 function attemptsNote() {
   const sitting = quiz()
   // Once passed, how many tries remain is no longer the Learner's concern.
@@ -458,7 +503,31 @@ onMount(async () => {
         </div>
         <div class="mt-4 notes" x-html="openLesson()?.body_html || ''"></div>
         <p class="mt-6 p-4 text-ink text-sm bg-accent-soft rounded-xl" :hidden="enrolled() || openLesson() === null">This one is free. Enroll to watch the rest and keep your place.</p>
-        <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="openLesson()?.kind === 'quiz' || !enrolled()" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
+        <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="openLesson()?.kind === 'quiz' || openLesson()?.kind === 'assignment' || !enrolled()" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
+
+        <div class="mt-6 pt-6 border-line border-t" :hidden="task() === null" hidden>
+          <p class="tabular-nums text-muted text-sm">{{ task()?.maxPoints }} points, {{ task()?.passPoints }} to pass</p>
+          <ul class="flex flex-col gap-1 mt-3" :hidden="(task()?.rubric.length || 0) === 0">
+            <li :for="(criterion, index) in task()?.rubric || []" class="flex gap-3 justify-between text-sm">
+              <span class="text-ink">{{ criterion.title }}</span>
+              <span class="tabular-nums text-muted">{{ task()?.submission?.rubric_scores[index] ?? '' }}{{ task()?.submission?.score === null || task()?.submission?.score === undefined ? '' : ' of ' }}{{ criterion.points }}</span>
+            </li>
+          </ul>
+
+          <div class="mt-4 p-4 rounded-xl" :class="task()?.submission?.status === 'passed' ? 'bg-accent-soft' : 'bg-tint'" :hidden="!task()?.submission" role="status">
+            <p class="font-medium text-ink" x-text="workStatus()"></p>
+            <p class="mt-2 text-ink text-sm whitespace-pre-line" :hidden="!task()?.submission?.feedback">{{ task()?.submission?.feedback || '' }}</p>
+          </div>
+
+          <form class="mt-5" :hidden="!task()?.canSubmit || task()?.submission?.status === 'passed'" @submit.prevent="handIn()">
+            <label for="work-body" class="block font-medium text-ink text-sm">Your answer</label>
+            <textarea id="work-body" rows="8" class="mt-2 px-4 py-3 w-full text-ink bg-page border border-line rounded-xl" :value="task()?.submission?.body || ''" @input="setWork('body', $event.target.value)"></textarea>
+            <label for="work-link" class="block mt-4 font-medium text-ink text-sm">Link to your work</label>
+            <input id="work-link" type="url" aria-describedby="work-link-help" class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl" :value="task()?.submission?.link || ''" @input="setWork('link', $event.target.value)">
+            <p id="work-link-help" class="mt-2 text-muted text-sm">Optional. An https link to a repository, a document or a recording.</p>
+            <button type="submit" class="inline-flex items-center mt-5 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">{{ task()?.submission ? 'Hand in again' : 'Hand in' }}</button>
+          </form>
+        </div>
 
         <div :hidden="quiz() === null" hidden>
           <div :hidden="attempt() !== null">

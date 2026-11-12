@@ -112,7 +112,7 @@ function closedMessage(access: LessonAccess): string {
  * Learner holds an active Enrollment in. When it was the last one, the
  * Enrollment is completed in the same call.
  */
-export async function completeLesson(userId: number, lessonId: number, at: Date = new Date(), options: { viaQuiz?: boolean } = {}): Promise<{ enrollment: EnrollmentRow, progress: LearnerProgress }> {
+export async function completeLesson(userId: number, lessonId: number, at: Date = new Date(), options: { earned?: boolean } = {}): Promise<{ enrollment: EnrollmentRow, progress: LearnerProgress }> {
   const lesson = await db.selectFrom('lessons').select(['id', 'course_id', 'kind']).where('id', '=', lessonId).executeTakeFirst() as { id: number, course_id: number, kind: string } | undefined
   const enrollment = lesson ? await enrollmentOf(userId, lesson.course_id) : null
 
@@ -125,10 +125,12 @@ export async function completeLesson(userId: number, lessonId: number, at: Date 
   if (closed)
     throw new EnrollmentError(closedMessage(closed))
 
-  // A quiz Lesson is completed by passing it. Only the quiz submission, which
-  // has just graded a passing Attempt, may say so.
-  if (lesson.kind === 'quiz' && !options.viaQuiz)
+  // A quiz or an assignment is completed by earning it. Only the code that
+  // has just graded a passing Attempt or Submission may say so.
+  if (lesson.kind === 'quiz' && !options.earned)
     throw new EnrollmentError('Pass the quiz to complete this lesson.')
+  if (lesson.kind === 'assignment' && !options.earned)
+    throw new EnrollmentError('This lesson is completed when your work is marked as passed.')
 
   const stamp = at.toISOString()
   // Looked up first so that completing a Lesson twice, which is ordinary, does
@@ -214,7 +216,7 @@ export async function lessonForLearner(userId: number, lessonId: number, at: Dat
  */
 export async function previewLesson(lessonId: number): Promise<LessonContent | null> {
   const lesson = await db.selectFrom('lessons').select(['id', 'course_id', 'title', 'kind', 'body', 'video_url', 'duration_seconds', 'is_preview']).where('id', '=', lessonId).executeTakeFirst() as (Omit<LessonContent, 'completed' | 'body_html' | 'position_seconds'> & { is_preview: number | boolean }) | undefined
-  if (!lesson || !lesson.is_preview || lesson.kind === 'quiz')
+  if (!lesson || !lesson.is_preview || lesson.kind === 'quiz' || lesson.kind === 'assignment')
     return null
 
   const course = await db.selectFrom('courses').select(['id']).where('id', '=', lesson.course_id).where('status', '=', 'published').where('deleted_at', 'is', null).executeTakeFirst()

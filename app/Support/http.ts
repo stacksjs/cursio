@@ -5,11 +5,13 @@
 
 import type { AcademyRow } from './academies'
 import { response } from '@stacksjs/router'
+import { db } from '@stacksjs/database'
 import { AcademyError, academyForStaff } from './academies'
 import type { CourseRow } from './courses'
 import { CourseError, courseInAcademy } from './courses'
 import { EnrollmentError } from './enrollment'
 import { QuizError } from './quizzes'
+import { AssignmentError } from './assignments'
 
 /** The signed-in user's id, or null. Never read from the request body. */
 export async function userIdOf(request: RequestInstance): Promise<number | null> {
@@ -37,7 +39,7 @@ export async function staffContext(request: RequestInstance): Promise<{ userId: 
 
 /** A rule the domain refused is the caller's to fix: 422 with its message. */
 export function refusal(error: unknown): Response {
-  if (error instanceof AcademyError || error instanceof CourseError || error instanceof EnrollmentError || error instanceof QuizError)
+  if (error instanceof AcademyError || error instanceof CourseError || error instanceof EnrollmentError || error instanceof QuizError || error instanceof AssignmentError)
     return response.json({ success: false, message: error.message }, 422)
 
   throw error
@@ -62,13 +64,19 @@ export function idList(request: RequestInstance, name: string): number[] {
 
 /** The Course a studio request names in `{id}`, found only inside the caller's Academy. */
 export async function studioCourse(request: RequestInstance): Promise<{ userId: number, academy: AcademyRow, course: CourseRow } | Response> {
-  const context = await staffContext(request)
-  if (context instanceof Response)
-    return context
+  const userId = await userIdOf(request)
+  if (!userId)
+    return response.unauthorized('Authentication required')
 
-  const course = await courseInAcademy(context.academy, idParam(request, 'id'))
-  if (!course)
+  // Someone who runs more than one Academy does not say which on every call:
+  // the Course says it. The Academy is still only found if the caller is its
+  // staff, so a Course id from elsewhere finds nothing, as before.
+  const courseId = idParam(request, 'id')
+  const owner = await db.selectFrom('courses').select(['academy_id']).where('id', '=', courseId).executeTakeFirst() as { academy_id: number } | undefined
+  const academy = owner ? await academyForStaff(userId, owner.academy_id) : null
+  const course = academy ? await courseInAcademy(academy, courseId) : null
+  if (!academy || !course)
     return response.notFound('Course not found')
 
-  return { ...context, course }
+  return { userId, academy, course }
 }

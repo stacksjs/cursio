@@ -521,7 +521,7 @@ export async function submitAttempt(userId: number, attemptId: number, responses
 
   let courseCompleted = enrollment.status === 'completed'
   if (graded.passed) {
-    const done = await completeLesson(userId, quiz.lesson_id, at, { viaQuiz: true })
+    const done = await completeLesson(userId, quiz.lesson_id, at, { earned: true })
     courseCompleted = done.enrollment.status === 'completed'
   }
 

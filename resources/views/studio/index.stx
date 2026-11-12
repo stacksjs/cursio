@@ -11,6 +11,8 @@ import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-a
 const loading = state(true)
 const signedIn = state(true)
 const academy = state(null)
+// Every Academy this account runs; most people have one.
+const academies = state([])
 const courses = state([])
 const problem = state('')
 const busy = state(false)
@@ -26,8 +28,11 @@ async function load() {
     return
   }
   try {
-    const data = await dashboardApi('/api/studio')
+    // `?academy=12` picks which one to show; without it, the first.
+    const wanted = Number(useSearchParams().get('academy')) || 0
+    const data = await dashboardApi(wanted ? `/api/studio?academy_id=${wanted}` : '/api/studio')
     academy.set(data.academy)
+    academies.set(data.academies || [])
     courses.set(data.courses)
   }
   catch (error) {
@@ -114,6 +119,10 @@ onMount(load)
 
   <div :hidden="academy() === null" hidden>
     <p class="mt-2 text-muted">{{ academy()?.name }} <span class="font-mono text-sm">/a/{{ academy()?.slug }}</span></p>
+
+    <nav class="flex flex-wrap gap-2 mt-4" :hidden="academies().length < 2" aria-label="Your academies">
+      <a :for="item in academies()" :href="'/studio?academy=' + item.id" class="inline-flex items-center px-4 h-10 text-sm border rounded-full" :class="item.id === academy()?.id ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted hover:text-ink'" :aria-current="item.id === academy()?.id ? 'page' : 'false'">{{ item.name }}</a>
+    </nav>
 
     <fieldset class="mt-6">
       <legend class="font-medium text-ink text-sm">What learners see them called</legend>

@@ -5,8 +5,12 @@ on:
     tags:
       - 'v*'
 
+# `id-token` is what lets npm trust this workflow: the two packages are
+# published with no token (trusted publishing, set on each package's npm page
+# for this repository and this file).
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -35,6 +39,21 @@ jobs:
 
       - name: Install Dependencies
         run: bun install
+
+      # `bun run release:patch` bumps the app and both packages to one version
+      # and pushes the tag that starts this run. The academy package goes
+      # first: `cursio` depends on it.
+      - name: Publish @cursio/academy
+        working-directory: packages/academy
+        run: pantry publish --npm --access public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish cursio
+        working-directory: packages/cursio
+        run: pantry publish --npm --access public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: stacksjs/action-releaser@v1.2.9

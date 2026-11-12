@@ -1,7 +1,7 @@
 {
   "name": "cursio",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Cursio",
   "engines": {
@@ -37,10 +37,10 @@
     "key:generate": "./buddy key:generate",
     "commit": "./buddy commit",
     "release": "./buddy release",
-    "release:patch": "./buddy release --bump patch",
+    "release:patch": "bunx --bun @stacksjs/bumpx patch --no-recursive --files package.json,packages/academy/package.json,packages/cursio/package.json --yes",
     "release:calendar": "./buddy release --bump calendar",
-    "release:minor": "./buddy release --bump minor",
-    "release:major": "./buddy release --bump major",
+    "release:minor": "bunx --bun @stacksjs/bumpx minor --no-recursive --files package.json,packages/academy/package.json,packages/cursio/package.json --yes",
+    "release:major": "bunx --bun @stacksjs/bumpx major --no-recursive --files package.json,packages/academy/package.json,packages/cursio/package.json --yes",
     "changelog": "./buddy changelog",
     "generate": "./buddy generate",
     "typecheck": "bun run typecheck:app",

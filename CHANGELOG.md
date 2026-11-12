@@ -1,5 +1,15 @@
 # Cursio Changelog
 
+[Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.3...v0.1.4)
+
+## ✨ Features
+
+- a discussion under each lesson, on the framework's comment table ([e7c927a](https://github.com/stacksjs/cursio/commit/e7c927a)) _(by Chris)_
+
+## Contributors
+
+- _Chris_
+
 [Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.2...v0.1.3)
 
 ## ✨ Features

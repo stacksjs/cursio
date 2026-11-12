@@ -14,6 +14,8 @@ export default {
   content: [
     './resources/views/**/*.{stx,html}',
     './resources/**/*.{stx,html}',
+    // The catalog and the player live in the package other apps install.
+    './packages/academy/components/**/*.stx',
     './storage/framework/defaults/resources/views/**/*.{stx,html}',
     './storage/framework/defaults/resources/components/**/*.{stx,html}',
     './node_modules/@stacksjs/error-handling/dist/views/**/*.{stx,html}',

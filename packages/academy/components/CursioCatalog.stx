@@ -4,6 +4,8 @@ import { learnBase, runtime, wordsOf } from '@cursio/academy'
 // Props: `school` (the Academy), `entries` (its catalog), `home` (where this
 // catalog lives in the app) and `api` (where the learner API answers).
 const academyHome = home || '/'
+// A page with its own headline passes `:heading="false"`.
+const showHeading = typeof heading === 'undefined' || (heading !== false && heading !== 'false')
 
 // The catalog a visitor browses: every published Course with what its card
 // shows, and the topics they fall under, in the order they first appear.
@@ -49,9 +51,11 @@ onMount(async () => {
 <template>
 <div data-stx-content>
 @if(school)
-  <h1 class="font-semibold text-4xl text-ink tracking-tight">{{ school.name }}</h1>
-  @if(school.tagline)
-    <p class="mt-3 max-w-[60ch] text-lg text-muted">{{ school.tagline }}</p>
+  @if(showHeading)
+    <h1 class="font-semibold text-4xl text-ink tracking-tight">{{ school.name }}</h1>
+    @if(school.tagline)
+      <p class="mt-3 max-w-[60ch] text-lg text-muted">{{ school.tagline }}</p>
+    @endif
   @endif
 
   <section class="mt-10" :hidden="watching().length === 0" hidden aria-labelledby="continue-heading">

@@ -25,6 +25,7 @@
     "src",
     "components",
     "routes",
+    "styles",
     "README.md"
   ],
   "stacks": {

@@ -1,0 +1,95 @@
+<script server>
+// Sign in to, or sign up for, the Academy from the app's own page. Props:
+// `mode` (`login` or `register`), `auth` (where the forwarding routes are
+// mounted, `/api/cursio` by default) and `home` (where to go afterwards when
+// the address names nowhere).
+const signUp = typeof mode !== 'undefined' && mode === 'register'
+const base = typeof auth !== 'undefined' && /^\/[\w\-/]*$/.test(String(auth)) ? String(auth).replace(/\/+$/, '') : '/api/cursio'
+const after = typeof home !== 'undefined' && home ? String(home) : '/'
+const title = signUp ? 'Create your account' : 'Sign in'
+</script>
+<script client>
+import { withCsrfHeader } from '@stacksjs/browser/composables/csrf'
+import { safeAuthRedirect, useAuth } from '~/storage/framework/defaults/functions/auth'
+
+const authBase = {{ base }}
+const signUp = {{ signUp }}
+const fallback = {{ after }}
+
+const busy = state(false)
+const problem = state('')
+// Typed text stays out of signals: nothing needs to redraw as it changes.
+let name = ''
+let email = ''
+let password = ''
+
+const asked = useSearchParams().get('redirect')
+const next = asked ? safeAuthRedirect(asked) : fallback
+const other = `${signUp ? '/login' : '/register'}${asked ? `?redirect=${encodeURIComponent(next)}` : ''}`
+
+function set(field, value) {
+  if (field === 'name')
+    name = value
+  else if (field === 'email')
+    email = value
+  else
+    password = value
+}
+
+async function submit() {
+  busy.set(true)
+  problem.set('')
+  try {
+    const body = signUp
+      ? { name: name.trim(), email: email.trim(), password, password_confirmation: password }
+      : { email: email.trim(), password }
+    const answer = await fetch(`${authBase}/${signUp ? 'register' : 'login'}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: withCsrfHeader({ 'Content-Type': 'application/json', 'Accept': 'application/json' }),
+      body: JSON.stringify(body),
+    })
+    const data = await answer.json().catch(() => ({}))
+    if (answer.ok && data.token) {
+      const session = useAuth()
+      session.token.value = data.token
+      session.user.value = data.user ?? null
+      navigate(next)
+      return
+    }
+    const first = data.errors ? Object.values(data.errors).flat()[0] : ''
+    problem.set(data.requires_two_factor || data.challenge_token
+      ? 'This account uses two-step sign-in, which this page does not offer yet.'
+      : (first || data.message || (signUp ? 'The account could not be created.' : 'That email and password do not match.')))
+  }
+  catch {
+    problem.set('The academy could not be reached. Try again in a moment.')
+  }
+  busy.set(false)
+}
+</script>
+<div class="mx-auto p-6 sm:p-8 max-w-md bg-surface border border-line rounded-2xl">
+  <h1 class="font-semibold text-2xl text-ink tracking-tight">{{ title }}</h1>
+  <form class="flex flex-col gap-4 mt-6" @submit.prevent="submit()">
+    @if(signUp)
+      <div>
+        <label for="cursio-name" class="block font-medium text-ink text-sm">Name</label>
+        <input id="cursio-name" type="text" autocomplete="name" required class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl" @input="set('name', $event.target.value)">
+      </div>
+    @endif
+    <div>
+      <label for="cursio-email" class="block font-medium text-ink text-sm">Email</label>
+      <input id="cursio-email" type="email" autocomplete="email" required class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl" @input="set('email', $event.target.value)">
+    </div>
+    <div>
+      <label for="cursio-password" class="block font-medium text-ink text-sm">Password</label>
+      <input id="cursio-password" type="password" autocomplete="{{ signUp ? 'new-password' : 'current-password' }}" required minlength="8" class="mt-2 px-4 h-11 w-full text-ink bg-page border border-line rounded-xl" @input="set('password', $event.target.value)">
+    </div>
+    <p class="font-medium text-ink text-sm" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+    <button type="submit" class="inline-flex items-center justify-center px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :disabled="busy()">{{ signUp ? 'Create account' : 'Sign in' }}</button>
+  </form>
+  <p class="mt-5 text-muted text-sm">
+    {{ signUp ? 'Already have an account?' : 'New here?' }}
+    <a :href="other" class="font-medium text-ink underline underline-offset-4">{{ signUp ? 'Sign in' : 'Create an account' }}</a>
+  </p>
+</div>

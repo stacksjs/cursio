@@ -98,6 +98,13 @@ async function forward(request: any, method: 'GET' | 'POST', upstream: string): 
   })
 }
 
+// The components' own stylesheet, served from the package so an app links it
+// instead of copying it: `<link rel="stylesheet" href="/api/cursio/academy.css">`.
+route.get('/academy.css', async () => {
+  const sheet = Bun.file(new URL('../styles/academy.css', import.meta.url))
+  return new Response(await sheet.text(), { headers: { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=300' } })
+})
+
 for (const [method, path, upstream] of forwarded) {
   if (method === 'GET')
     route.get(path, (request: any) => forward(request, 'GET', upstream))

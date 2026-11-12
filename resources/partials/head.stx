@@ -25,3 +25,4 @@ const headUrl = `${site.url}${headPath === '/' ? '/' : headPath}`
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/assets/styles/cursio.css">
+<link rel="stylesheet" href="/api/cursio/academy.css">

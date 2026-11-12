@@ -99,23 +99,9 @@ export async function academyForSite(site: { subdomain?: string } | null | undef
   return site?.subdomain ? await academyBySlug(site.subdomain) : null
 }
 
-export interface Words {
-  course: string
-  courses: string
-  lesson: string
-  lessons: string
-}
-
-/**
- * The words an Academy's Learners read. The domain keeps one language (Course,
- * Lesson); this only changes the labels, so a screencast site can say series
- * and episodes without anything underneath being different.
- */
-export function wordsOf(academy: { vocabulary?: string } | null | undefined): Words {
-  return academy?.vocabulary === 'series'
-    ? { course: 'series', courses: 'series', lesson: 'episode', lessons: 'episodes' }
-    : { course: 'course', courses: 'courses', lesson: 'lesson', lessons: 'lessons' }
-}
+// The words an Academy's Learners read live with the components that print
+// them, in the package other apps install too.
+export { type Words, wordsOf } from '@cursio/academy'
 
 export async function updateAcademy(academy: AcademyRow, input: { name?: string, tagline?: string, vocabulary?: string }): Promise<AcademyRow> {
   const next = { ...academy }

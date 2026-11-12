@@ -14,7 +14,7 @@ export default new Action({
       return response.notFound('Academy not found')
 
     return response.json({
-      academy: { name: academy.name, slug: academy.slug, tagline: academy.tagline },
+      academy: { name: academy.name, slug: academy.slug, tagline: academy.tagline, vocabulary: academy.vocabulary },
       courses: await catalogOf(academy.id),
     })
   },

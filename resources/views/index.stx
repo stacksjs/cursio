@@ -2,7 +2,7 @@
 @section('content')
 <script server>
 import { academyForSite } from '~/app/Support/academies'
-import { publishedCourses } from '~/app/Support/courses'
+import { catalogOf } from '~/app/Support/courses'
 import { site } from '~/resources/data/site'
 
 // One address, two meanings: on an Academy's own host `/` is that Academy's
@@ -10,7 +10,7 @@ import { site } from '~/resources/data/site'
 // `school` too and swaps its chrome, because a view has one layout and cannot
 // choose between two.
 const school = await academyForSite(requestContext.site())
-const courses = school ? await publishedCourses(school.id) : []
+const entries = school ? await catalogOf(school.id) : []
 const academyHome = '/'
 
 const pageTitle = school ? school.name : site.title
@@ -19,7 +19,7 @@ const canonicalPath = '/'
 </script>
 @if(school)
   <div class="mx-auto px-4 py-10 md:px-8 max-w-5xl">
-    @include('academy-home')
+    <CursioCatalog :school="school" :entries="entries" :home="academyHome" api="/api/learn" />
   </div>
 @else
   <HomeHero />

@@ -5,6 +5,7 @@
     "": {
       "name": "stacks",
       "dependencies": {
+        "@cursio/academy": "workspace:*",
         "@stacksjs/actions": "^0.75.539",
         "@stacksjs/env": "^0.75.539",
         "@stacksjs/path": "^0.75.539",
@@ -17,6 +18,10 @@
         "better-dx": "^0.2.37",
         "bun-plugin-stx": "0.2.842",
       },
+    },
+    "packages/academy": {
+      "name": "@cursio/academy",
+      "version": "0.1.0",
     },
     "storage/framework": {
       "name": "stacks-framework",
@@ -36,6 +41,8 @@
     "@buddysh/buddy": ["@buddysh/buddy@0.11.15", "", { "dependencies": { "prompts": "^2.4.2", "ts-pantry": "^0.11.64" }, "peerDependencies": { "@anthropic-ai/sdk": ">=0.117.1 <0.123.0" }, "optionalPeers": ["@anthropic-ai/sdk"], "bin": { "buddy": "./dist/bin/cli.js" } }, "sha512-WmUre1Ihvv1dSPnglRSVzFDV7+/UvrB6kySC4Une2UDgrPYg57RRnsBlmv/zvWd8F00lDohkZ53gDWR06q3jVw=="],
 
     "@bughq/sdk": ["@bughq/sdk@0.3.0", "", {}, "sha512-7hHjXJNUrMK/G5w+arw2b8IM2dlV1pU6i7KOScvO9+K/QbHDUjsz/CousavHEh7CE0Puo1TavbG7hl3Rkt1LOA=="],
+
+    "@cursio/academy": ["@cursio/academy@workspace:packages/academy"],
 
     "@cwcss/crosswind": ["@cwcss/crosswind@0.2.19", "", { "dependencies": { "@stacksjs/clapp": "^0.2.0", "bunfig": "^0.15.17" }, "bin": { "crosswind": "./dist/cli.js" } }, "sha512-NswUZPNHbdkW4rxvmwjjIM7jyfQ/rr0X1J1uwjTUwixc3BXQs1Fk7pP5cC7MxkGGnmRTFs2O9J+U9tJ36ZJ7fQ=="],
 

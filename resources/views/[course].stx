@@ -16,12 +16,12 @@ if (!found)
   notFound()
 
 const outline = found ? await outlineOf(found.id) : { sections: [], lessonIds: [] }
-const lessonTotal = outline.lessonIds.length
-const apiPath = school ? `/api/learn/${school.slug}/courses/${courseSlug}` : ''
 const returnPath = academyHome === '/' ? `/${courseSlug}` : `${academyHome}/${courseSlug}`
 const pageTitle = found ? `${found.title} - ${school.name}` : 'Course not found'
 const pageDescription = found?.summary || ''
 const canonicalPath = returnPath
 </script>
-@include('course-player')
+@if(found)
+  <CursioPlayer :school="school" :course="found" :outline="outline" :home="academyHome" :path="returnPath" api="/api/learn" />
+@endif
 @endsection

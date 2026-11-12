@@ -1,0 +1,41 @@
+{
+  "name": "@cursio/academy",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Run a Cursio academy inside your own Stacks app: the catalog, the player and sign-in as stx components, and a typed client.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stacksjs/cursio.git",
+    "directory": "packages/academy"
+  },
+  "keywords": [
+    "cursio",
+    "lms",
+    "stacks",
+    "stx",
+    "courses"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src",
+    "components",
+    "routes",
+    "README.md"
+  ],
+  "stacks": {
+    "name": "cursio-academy",
+    "description": "A Cursio academy inside a Stacks app",
+    "components": [
+      "components"
+    ],
+    "routes": [
+      "routes/cursio.ts"
+    ],
+    "routePrefix": "/api/cursio"
+  }
+}

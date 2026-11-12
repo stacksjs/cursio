@@ -31,6 +31,7 @@ export const actions = {
   'Actions/Studio/DeleteQuestionAction': '../../../app/Actions/Studio/DeleteQuestionAction.ts',
   'Actions/Studio/DeleteSectionAction': '../../../app/Actions/Studio/DeleteSectionAction.ts',
   'Actions/Studio/GradebookAction': '../../../app/Actions/Studio/GradebookAction.ts',
+  'Actions/Studio/MarkEssayAction': '../../../app/Actions/Studio/MarkEssayAction.ts',
   'Actions/Studio/MarkSubmissionAction': '../../../app/Actions/Studio/MarkSubmissionAction.ts',
   'Actions/Studio/PublishCourseAction': '../../../app/Actions/Studio/PublishCourseAction.ts',
   'Actions/Studio/QuizShowAction': '../../../app/Actions/Studio/QuizShowAction.ts',

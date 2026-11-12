@@ -20,8 +20,8 @@ export default new Action({
       return response.notFound('Course not found')
 
     return response.json({
-      academy: { name: academy.name, slug: academy.slug },
-      course: { id: course.id, title: course.title, slug: course.slug, summary: course.summary },
+      academy: { name: academy.name, slug: academy.slug, tagline: academy.tagline, vocabulary: academy.vocabulary },
+      course: { id: course.id, title: course.title, slug: course.slug, summary: course.summary, level: course.level, topic: course.topic },
       outline: await outlineOf(course.id),
     })
   },

@@ -1,11 +1,13 @@
 <script server>
-import { wordsOf } from '~/app/Support/academies'
-import { catalogOf, runtime } from '~/app/Support/courses'
+import { learnBase, runtime, wordsOf } from '@cursio/academy'
+
+// Props: `school` (the Academy), `entries` (its catalog), `home` (where this
+// catalog lives in the app) and `api` (where the learner API answers).
+const academyHome = home || '/'
 
 // The catalog a visitor browses: every published Course with what its card
 // shows, and the topics they fall under, in the order they first appear.
 const words = wordsOf(school)
-const entries = school ? await catalogOf(school.id) : []
 const base = academyHome === '/' ? '/' : `${academyHome}/`
 const cards = entries.map(entry => ({
   ...entry,
@@ -15,7 +17,7 @@ const cards = entries.map(entry => ({
   time: runtime(entry.seconds),
 }))
 const topics = [...new Set(entries.map(entry => entry.topic).filter(Boolean))]
-const libraryPath = school ? `/api/learn/${school.slug}/library` : ''
+const libraryPath = school ? `${learnBase(api)}/${school.slug}/library` : ''
 </script>
 <script client>
 import { useAuth } from '~/storage/framework/defaults/functions/auth'

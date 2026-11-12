@@ -2,18 +2,18 @@
 @section('content')
 <script server>
 import { academyBySlug } from '~/app/Support/academies'
-import { publishedCourses } from '~/app/Support/courses'
+import { catalogOf } from '~/app/Support/courses'
 
 const slug = typeof academy !== 'undefined' ? String(academy) : ''
 const school = slug ? await academyBySlug(slug) : null
 if (!school)
   notFound()
 
-const courses = school ? await publishedCourses(school.id) : []
+const entries = school ? await catalogOf(school.id) : []
 const academyHome = `/a/${slug}`
 const pageTitle = school ? `${school.name} - Cursio` : 'Academy not found'
 const pageDescription = school?.tagline || (school ? `Courses from ${school.name}.` : '')
 const canonicalPath = academyHome
 </script>
-@include('academy-home')
+<CursioCatalog :school="school" :entries="entries" :home="academyHome" api="/api/learn" />
 @endsection

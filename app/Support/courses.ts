@@ -433,10 +433,4 @@ export async function catalogOf(academyId: number): Promise<CatalogEntry[]> {
   })
 }
 
-/** `1h 24m`, `12m`, or nothing for a series with no running time yet. */
-export function runtime(seconds: number): string {
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 1)
-    return ''
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`
-}
+export { runtime } from '@cursio/academy'

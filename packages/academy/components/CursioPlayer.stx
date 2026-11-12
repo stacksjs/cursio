@@ -1,6 +1,16 @@
 <script server>
-import { wordsOf } from '~/app/Support/academies'
-import { runtime } from '~/app/Support/courses'
+import { learnBase, runtime, wordsOf } from '@cursio/academy'
+
+// Props: `school` (the Academy), `course`, `outline`, `home` (where the
+// catalog lives in this app), `path` (this page, for coming back after
+// sign-in) and `api` (where the learner API answers: `/api/learn` on Cursio
+// itself, `/api/cursio/learn` in an app that proxies to it).
+const found = course
+const academyHome = home || '/'
+const returnPath = path || academyHome
+const lessonTotal = outline.lessonIds.length
+const learnApi = learnBase(api)
+const apiPath = `${learnApi}/${school.slug}/courses/${course.slug}`
 
 // What a screencast page needs from the outline, worked out once: the order
 // Lessons are met in (an episode's number is its place in it), which may be
@@ -27,6 +37,7 @@ import { useAuth } from '~/storage/framework/defaults/functions/auth'
 import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
 
 const coursePath = {{ apiPath }}
+const learnApi = {{ learnApi }}
 const total = {{ lessonTotal }}
 const order = {{ lessonOrder }}
 const previews = {{ previewIds }}
@@ -137,8 +148,8 @@ async function open(lessonId) {
   try {
     // Not enrolled: only a free preview got this far, and it has its own door.
     const data = enrolled()
-      ? await dashboardApi(`/api/learn/lessons/${lessonId}`)
-      : await fetch(`/api/learn/lessons/${lessonId}/preview`, { headers: { Accept: 'application/json' } }).then(answer => answer.ok ? answer.json() : Promise.reject(new Error('This preview could not be opened.')))
+      ? await dashboardApi(`${learnApi}/lessons/${lessonId}`)
+      : await fetch(`${learnApi}/lessons/${lessonId}/preview`, { headers: { Accept: 'application/json' } }).then(answer => answer.ok ? answer.json() : Promise.reject(new Error('This preview could not be opened.')))
     try {
       useSearchParams().set('episode', String(order.indexOf(lessonId) + 1))
     }
@@ -146,13 +157,13 @@ async function open(lessonId) {
       // The address is a convenience; the episode opens either way.
     }
     if (data.lesson.kind === 'assignment') {
-      const brief = await dashboardApi(`/api/learn/lessons/${lessonId}/assignment`)
+      const brief = await dashboardApi(`${learnApi}/lessons/${lessonId}/assignment`)
       workBody = brief.assignment.submission?.body || ''
       workLink = brief.assignment.submission?.link || ''
       task.set(brief.assignment)
     }
     if (data.lesson.kind === 'quiz') {
-      const sitting = await dashboardApi(`/api/learn/lessons/${lessonId}/quiz`)
+      const sitting = await dashboardApi(`${learnApi}/lessons/${lessonId}/quiz`)
       quiz.set(sitting.quiz)
       if (sitting.quiz.open)
         begin(sitting.quiz.open)
@@ -170,7 +181,7 @@ async function complete() {
     return
   busy.set(true)
   try {
-    const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/complete`, { method: 'POST', body: {} })
+    const data = await dashboardApi(`${learnApi}/lessons/${lesson.id}/complete`, { method: 'POST', body: {} })
     take(data.progress)
     openLesson.set({ ...lesson, completed: true })
     if (data.courseCompleted) {
@@ -234,7 +245,7 @@ async function startQuiz() {
   busy.set(true)
   problem.set('')
   try {
-    const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/quiz/attempts`, { method: 'POST', body: {} })
+    const data = await dashboardApi(`${learnApi}/lessons/${lesson.id}/quiz/attempts`, { method: 'POST', body: {} })
     begin(data.attempt)
   }
   catch (error) {
@@ -297,7 +308,7 @@ async function submitQuiz() {
       answers[question.id] = picks()[question.id] || []
   }
   try {
-    const data = await dashboardApi(`/api/learn/attempts/${sitting.id}/submit`, { method: 'POST', body: { answers } })
+    const data = await dashboardApi(`${learnApi}/attempts/${sitting.id}/submit`, { method: 'POST', body: { answers } })
     stopClock()
     const byId = Object.fromEntries(data.result.questions.map(item => [item.id, item]))
     reviewed.set(sitting.questions.map(question => ({ ...question, ...byId[question.id], right: rightAnswer(question, byId[question.id]) })))
@@ -350,7 +361,7 @@ async function handIn() {
   busy.set(true)
   problem.set('')
   try {
-    const data = await dashboardApi(`/api/learn/lessons/${lesson.id}/assignment/submit`, { method: 'POST', body: { body: workBody, link: workLink } })
+    const data = await dashboardApi(`${learnApi}/lessons/${lesson.id}/assignment/submit`, { method: 'POST', body: { body: workBody, link: workLink } })
     task.set({ ...task(), submission: data.submission })
   }
   catch (error) {
@@ -410,7 +421,7 @@ function watched(video) {
   if (!lesson || !enrolled() || Math.abs(video.currentTime - savedAt) < 10)
     return
   savedAt = video.currentTime
-  dashboardApi(`/api/learn/lessons/${lesson.id}/position`, { method: 'POST', body: { seconds: Math.round(video.currentTime) } }).catch(() => {})
+  dashboardApi(`${learnApi}/lessons/${lesson.id}/position`, { method: 'POST', body: { seconds: Math.round(video.currentTime) } }).catch(() => {})
 }
 
 /** The episode ran to its end: that completes it, and the next one starts. */

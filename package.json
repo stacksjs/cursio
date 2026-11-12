@@ -61,9 +61,11 @@
     "stacks": "^0.75.539",
     "@stacksjs/env": "^0.75.539",
     "@stacksjs/path": "^0.75.539",
-    "@stacksjs/actions": "^0.75.539"
+    "@stacksjs/actions": "^0.75.539",
+    "@cursio/academy": "workspace:*"
   },
   "workspaces": [
+    "packages/*",
     "storage/framework",
     "storage/framework/libs/*",
     "storage/framework/views/*"

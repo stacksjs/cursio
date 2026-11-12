@@ -22,6 +22,17 @@
     "packages/academy": {
       "name": "@cursio/academy",
       "version": "0.1.0",
+      "peerDependencies": {
+        "@stacksjs/env": ">=0.75.0",
+        "@stacksjs/router": ">=0.75.0",
+      },
+    },
+    "packages/cursio": {
+      "name": "cursio",
+      "version": "0.1.0",
+      "dependencies": {
+        "@cursio/academy": "^0.1.0",
+      },
     },
     "storage/framework": {
       "name": "stacks-framework",
@@ -381,6 +392,8 @@
     "clone": ["clone@2.1.2", "", {}, "sha512-3Pe/CF1Nn94hyhIYpjtiLhdCoEoz0DqQ+988E9gmeEdQZlojxnOb74wctFyuwWQHzqyf9X7C7MG8juUpqBJT8w=="],
 
     "craft-native": ["craft-native@0.0.496", "", { "bin": { "craft-sdk": "dist/cli.js" } }, "sha512-m/wNcE0lDIc96WHXsgZk32493jLoX+pHGx0VryRkgTwQXwZHJl319/my7ldwsOYw5F5kgR/X83bAdIHV9FfzEA=="],
+
+    "cursio": ["cursio@workspace:packages/cursio"],
 
     "cz-git": ["cz-git@1.14.0", "", {}, "sha512-QjwlXZrGWsXQkyregBHhA2qNNGB2TCuf0ovkW1Q5OLgdJDs9Tq1yahfKpSMLyqOBjVRuv1iHBTDP83zJDBlJdg=="],
 

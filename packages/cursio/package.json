@@ -1,0 +1,42 @@
+{
+  "name": "cursio",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "The Cursio client: read a Cursio academy's catalog and courses from your own app.",
+  "author": "Chris Breuer <chris@stacksjs.com>",
+  "license": "MIT",
+  "homepage": "https://cursio.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stacksjs/cursio.git",
+    "directory": "packages/cursio"
+  },
+  "bugs": {
+    "url": "https://github.com/stacksjs/cursio/issues"
+  },
+  "keywords": [
+    "cursio",
+    "lms",
+    "courses",
+    "stacks"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@cursio/academy": "^0.1.0"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  }
+}

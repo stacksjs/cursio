@@ -1,5 +1,19 @@
 # Cursio Changelog
 
+[Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.4...v0.1.5)
+
+## ✨ Features
+
+- private lesson notes, and course reviews with ratings ([9793aca](https://github.com/stacksjs/cursio/commit/9793aca)) _(by Chris)_
+
+## 🔧 Chores
+
+- regenerate server auto-imports for the note and review models ([a336c72](https://github.com/stacksjs/cursio/commit/a336c72)) _(by Chris)_
+
+## Contributors
+
+- _Chris_
+
 [Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.3...v0.1.4)
 
 ## ✨ Features

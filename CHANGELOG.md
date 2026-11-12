@@ -1,1 +1,35 @@
 # Cursio Changelog
+
+## ✨ Features
+
+- question banks, so each quiz attempt can draw a different set of questions ([3995b45](https://github.com/stacksjs/cursio/commit/3995b45)) _(by Chris)_
+- cursio, the client under its short npm name ([ca06508](https://github.com/stacksjs/cursio/commit/ca06508)) _(by Chris)_
+- **academy**: sign-in component, the package's own stylesheet, a catalog without its heading ([c40d9c6](https://github.com/stacksjs/cursio/commit/c40d9c6)) _(by Chris)_
+- @cursio/academy, the catalog, player and client another Stacks app installs ([0aa73e0](https://github.com/stacksjs/cursio/commit/0aa73e0)) _(by Chris)_
+- essay questions marked by hand, and assignment scores in the gradebook ([29ef8bf](https://github.com/stacksjs/cursio/commit/29ef8bf)) _(by Chris)_
+- assignments with rubric marking, and studios with several academies ([1b74b72](https://github.com/stacksjs/cursio/commit/1b74b72)) _(by Chris)_
+- build the Learn Stacks academy from the framework docs ([6af22d4](https://github.com/stacksjs/cursio/commit/6af22d4)) _(by Chris)_
+- run an academy as a screencast site ([50600b4](https://github.com/stacksjs/cursio/commit/50600b4)) _(by Chris)_
+- ordering and matching quiz questions ([e8439f8](https://github.com/stacksjs/cursio/commit/e8439f8)) _(by Chris)_
+- gradebook, learner access and quiz reopening for staff ([4698ce0](https://github.com/stacksjs/cursio/commit/4698ce0)) _(by Chris)_
+- quizzes, graded attempts and verifiable certificates ([c9d9411](https://github.com/stacksjs/cursio/commit/c9d9411)) _(by Chris Breuer)_
+- edit, reorder and delete course content; drip and linear progression ([a32f969](https://github.com/stacksjs/cursio/commit/a32f969)) _(by Chris)_
+- academies on their own host ([fea8cdb](https://github.com/stacksjs/cursio/commit/fea8cdb)) _(by Chris)_
+- studio and learner pages for the first course journey ([ed0b5dc](https://github.com/stacksjs/cursio/commit/ed0b5dc)) _(by Chris)_
+- course authoring, enrollment and progress ([4931354](https://github.com/stacksjs/cursio/commit/4931354)) _(by Chris)_
+- scaffold Cursio with marketing home page ([10641ee](https://github.com/stacksjs/cursio/commit/10641ee)) _(by Chris)_
+
+## 🐛 Bug Fixes
+
+- **academy**: the Stacks packages are optional peers, so the client alone installs light ([fd7e371](https://github.com/stacksjs/cursio/commit/fd7e371)) _(by Chris)_
+- declare the sites base-domain env key ([9a98bea](https://github.com/stacksjs/cursio/commit/9a98bea)) _(by Chris)_
+
+## 🔧 Chores
+
+- release the app and both npm packages together with bun run release:patch ([13733e3](https://github.com/stacksjs/cursio/commit/13733e3)) _(by Chris)_
+- **academy**: README, license, peer dependencies and a publish workflow ([1d2d9a2](https://github.com/stacksjs/cursio/commit/1d2d9a2)) _(by Chris)_
+
+## Contributors
+
+- _Chris_
+- _Chris Breuer_

@@ -1,5 +1,15 @@
 # Cursio Changelog
 
+[Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.6...v0.1.7)
+
+## 🐛 Bug Fixes
+
+- **academy**: wording follows the academy's vocabulary and does not assume video ([f8890c1](https://github.com/stacksjs/cursio/commit/f8890c1)) _(by Chris)_
+
+## Contributors
+
+- _Chris_
+
 [Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.5...v0.1.6)
 
 ## ✨ Features

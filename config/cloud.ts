@@ -21,9 +21,10 @@ const PORT_API = 3288
  * in this repository are generated for SQLite. Moving to Postgres means
  * regenerating and testing them against Postgres first.
  *
- * Academies on their own subdomains (`{slug}.cursio.org`) are not routed yet:
- * a wildcard hostname needs a DNS-issued certificate. Until then an academy
- * is reached at `/a/{slug}`, or through an app that installs @cursio/academy.
+ * Academies answer on their own subdomains (`{slug}.cursio.org`) through the
+ * wildcard alias on the main site. Its certificate is issued over DNS, with
+ * the Porkbun keys in the site's shared `.env` on the box. An academy is also
+ * reached at `/a/{slug}`, or through an app that installs @cursio/academy.
  */
 export const tsCloud: TsCloudConfig = {
   project: {
@@ -95,6 +96,7 @@ export const tsCloud: TsCloudConfig = {
       root: '.',
       path: '/',
       domain: APP_DOMAIN,
+      aliases: [`*.${APP_DOMAIN}`],
       start: 'bun node_modules/@stacksjs/buddy/dist/serve-entry.js',
       port: PORT,
       preStart: [

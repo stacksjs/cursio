@@ -1,5 +1,20 @@
 # Cursio Changelog
 
+[Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.5...v0.1.6)
+
+## ✨ Features
+
+- check a certificate from an app that fronts an academy, and name the Stacks academy LessonStack ([7b74182](https://github.com/stacksjs/cursio/commit/7b74182)) _(by Chris)_
+- a report per course: enrollment, drop-off by lesson and quiz item analysis ([4e49eb8](https://github.com/stacksjs/cursio/commit/4e49eb8)) _(by Chris)_
+
+## 🔧 Chores
+
+- upgrade to stacks 0.75.568, which brings buddy hq:connect and hq:status ([1415ee2](https://github.com/stacksjs/cursio/commit/1415ee2)) _(by Chris)_
+
+## Contributors
+
+- _Chris_
+
 [Compare changes](https://github.com/stacksjs/cursio/compare/v0.1.4...v0.1.5)
 
 ## ✨ Features

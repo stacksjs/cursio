@@ -58,11 +58,11 @@
   },
   "dependencies": {
     "@cursio/academy": "workspace:*",
-    "@stacksjs/actions": "^0.75.568",
-    "@stacksjs/env": "^0.75.568",
-    "@stacksjs/path": "^0.75.568",
+    "@stacksjs/actions": "^0.75.573",
+    "@stacksjs/env": "^0.75.573",
+    "@stacksjs/path": "^0.75.573",
     "@stacksjs/stx": "0.2.864",
-    "stacks": "^0.75.568"
+    "stacks": "^0.75.573"
   },
   "workspaces": [
     "packages/*",

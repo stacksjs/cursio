@@ -9,6 +9,7 @@ export const actions = {
   'Actions/Learn/AddNoteAction': '../../../app/Actions/Learn/AddNoteAction.ts',
   'Actions/Learn/AssignmentShowAction': '../../../app/Actions/Learn/AssignmentShowAction.ts',
   'Actions/Learn/CatalogAction': '../../../app/Actions/Learn/CatalogAction.ts',
+  'Actions/Learn/CertificateAction': '../../../app/Actions/Learn/CertificateAction.ts',
   'Actions/Learn/CommentsAction': '../../../app/Actions/Learn/CommentsAction.ts',
   'Actions/Learn/CompleteLessonAction': '../../../app/Actions/Learn/CompleteLessonAction.ts',
   'Actions/Learn/CourseProgressAction': '../../../app/Actions/Learn/CourseProgressAction.ts',

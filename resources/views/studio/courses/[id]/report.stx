@@ -76,7 +76,7 @@ onMount(async () => {
       <ol class="flex gap-2 items-end mt-5 h-40">
         <li :for="entry in report()?.enrollments || []" class="flex flex-1 flex-col gap-2 items-center justify-end h-full">
           <span class="tabular-nums text-ink text-xs">{{ entry.count }}</span>
-          <span class="w-full min-h-1 bg-accent rounded-t-md" :style="'height: ' + barHeight(entry.count)" aria-hidden="true"></span>
+          <span class="min-h-1 w-full bg-accent rounded-t-md" :style="'height: ' + barHeight(entry.count)" aria-hidden="true"></span>
           <span class="text-muted text-xs whitespace-nowrap">{{ weekLabel(entry.week) }}</span>
         </li>
       </ol>
@@ -88,7 +88,7 @@ onMount(async () => {
       <ol class="flex flex-col gap-3 mt-5">
         <li :for="step in report()?.funnel || []" class="grid gap-x-4 gap-y-1 grid-cols-1 md:grid-cols-12 md:items-center">
           <p class="md:col-span-5 min-w-0 text-ink text-sm truncate"><span class="tabular-nums text-muted">{{ step.number }}.</span> {{ step.title }}</p>
-          <div class="md:col-span-5 overflow-hidden h-2 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="step.percent" :aria-label="'Completed ' + step.title">
+          <div class="overflow-hidden md:col-span-5 h-2 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="step.percent" :aria-label="'Completed ' + step.title">
             <div class="h-full bg-accent rounded-full" :style="'width: ' + step.percent + '%'"></div>
           </div>
           <p class="md:col-span-2 tabular-nums text-muted text-sm md:text-right">{{ step.completed }} ({{ step.percent }}%)<span :hidden="step.dropped === 0">, {{ step.dropped }} fewer</span></p>

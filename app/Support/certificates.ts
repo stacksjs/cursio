@@ -83,3 +83,29 @@ export async function issueCertificate(enrollment: { id: number, user_id: number
 
   return await certificateOf(enrollment.id)
 }
+
+/** What anyone holding a serial may read: what the Certificate says, no more. */
+export interface PublicCertificate {
+  serial: string
+  learnerName: string
+  courseTitle: string
+  academyName: string
+  issuedAt: string
+  revoked: boolean
+}
+
+export function publicCertificate(row: CertificateRow): PublicCertificate {
+  return { serial: row.serial, learnerName: row.learner_name, courseTitle: row.course_title, academyName: row.academy_name, issuedAt: row.issued_at, revoked: Boolean(row.revoked_at) }
+}
+
+/**
+ * A Certificate by its serial, only if this Academy issued it. An app that is
+ * the front of one Academy checks its own Certificates and nobody else's.
+ */
+export async function certificateInAcademy(academyId: number, serial: string): Promise<PublicCertificate | null> {
+  const row = await certificateBySerial(serial)
+  if (!row)
+    return null
+  const course = await db.selectFrom('courses').select(['academy_id']).where('id', '=', row.course_id).executeTakeFirst() as { academy_id: number } | undefined
+  return course?.academy_id === academyId ? publicCertificate(row) : null
+}

@@ -16,6 +16,7 @@ route.post('/{academy}/courses/{course}/review/withdraw', 'Actions/Learn/Withdra
 route.get('/lessons/{id}/notes', 'Actions/Learn/NotesAction').middleware('auth')
 route.post('/lessons/{id}/notes', 'Actions/Learn/AddNoteAction').middleware('auth')
 route.post('/notes/{id}/remove', 'Actions/Learn/RemoveNoteAction').middleware('auth')
+route.get('/{academy}/certificates/{serial}', 'Actions/Learn/CertificateAction')
 route.get('/{academy}/library', 'Actions/Learn/LibraryAction').middleware('auth')
 route.get('/{academy}/search', 'Actions/Learn/SearchAction')
 route.get('/lessons/{id}/preview', 'Actions/Learn/LessonPreviewAction')

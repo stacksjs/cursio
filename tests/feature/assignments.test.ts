@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db } from '@stacksjs/database'
 import { createAcademy } from '../../app/Support/academies'
 import { AssignmentError, assignmentForLearner, assignmentForStudio, markFrom, markSubmission, parseRubric, rubricProblem, submissionsOf, submitWork, updateAssignment } from '../../app/Support/assignments'
-import { certificateOf } from '../../app/Support/certificates'
+import { certificateInAcademy, certificateOf } from '../../app/Support/certificates'
 import { addLesson, addSection, CourseError, createCourse, deleteLesson, publishCourse, updateLesson } from '../../app/Support/courses'
 import { completeLesson, enroll, enrollmentOf, previewLesson, progressOf } from '../../app/Support/enrollment'
 import { gradebookCsv, gradebookOf, setAccess } from '../../app/Support/gradebook'
@@ -210,6 +210,16 @@ describe('handing in and marking', () => {
     const enrollment = await enrollmentOf(ada, course.id)
     expect(enrollment?.status).toBe('completed')
     expect((await certificateOf(enrollment!.id))?.serial).toMatch(/^CUR-/)
+  })
+
+  test('the certificate can be checked by the academy that issued it, and by no other', async () => {
+    const enrollment = await enrollmentOf(ada, course.id)
+    const serial = (await certificateOf(enrollment!.id))!.serial
+    const seen = await certificateInAcademy(academy.id, serial.toLowerCase())
+    expect(seen).toMatchObject({ serial, revoked: false, academyName: academy.name })
+    expect(Object.keys(seen!).sort()).toEqual(['academyName', 'courseTitle', 'issuedAt', 'learnerName', 'revoked', 'serial'])
+    expect(await certificateInAcademy(other.id, serial)).toBeNull()
+    expect(await certificateInAcademy(academy.id, 'CUR-ZZZZ-ZZZZ-ZZZZ')).toBeNull()
   })
 
   test('passed work is closed: no new hand-in, no new mark', async () => {

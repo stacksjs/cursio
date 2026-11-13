@@ -1,0 +1,41 @@
+<script server>
+import { issuedOn } from '@cursio/academy'
+
+// A certificate, as anyone holding its serial may see it. Props:
+// `certificate` (from `createCursio().certificate(serial)`, or null when no
+// certificate has that serial).
+const found = typeof certificate !== 'undefined' && certificate ? certificate : null
+const revoked = Boolean(found?.revoked)
+const day = found ? issuedOn(found.issuedAt) : ''
+</script>
+@if(found)
+  <p class="inline-flex gap-2 items-center px-4 h-10 font-medium text-sm rounded-full print:hidden {{ revoked ? 'bg-tint text-ink' : 'bg-accent-soft text-ink' }}" role="status">
+    <span class="size-5 {{ revoked ? 'i-hugeicons-cancel-circle text-muted' : 'i-hugeicons-checkmark-circle-02 text-accent' }}" aria-hidden="true"></span>
+    {{ revoked ? 'This certificate was withdrawn by the academy that issued it.' : 'This certificate is genuine.' }}
+  </p>
+
+  <article class="mt-6 px-6 py-12 md:px-16 md:py-20 text-center bg-surface border border-line rounded-2xl {{ revoked ? 'opacity-60' : '' }}">
+    <span class="mx-auto size-12 text-accent i-hugeicons-award-01" aria-hidden="true"></span>
+    <p class="mt-6 text-muted text-sm tracking-wide uppercase">Certificate of completion</p>
+    <h1 class="mt-6 font-semibold text-4xl text-ink tracking-tight md:text-5xl">{{ found.learnerName }}</h1>
+    <p class="mt-6 text-muted">has completed</p>
+    <p class="mt-2 font-semibold text-2xl text-ink tracking-tight">{{ found.courseTitle }}</p>
+    <p class="mt-2 text-muted">at {{ found.academyName }}</p>
+
+    <dl class="grid gap-6 grid-cols-1 sm:grid-cols-2 mt-12 mx-auto pt-8 max-w-md border-line border-t">
+      <div>
+        <dt class="text-muted text-xs">Issued</dt>
+        <dd class="mt-1 text-ink">{{ day }}</dd>
+      </div>
+      <div>
+        <dt class="text-muted text-xs">Serial</dt>
+        <dd class="mt-1 font-mono text-ink">{{ found.serial }}</dd>
+      </div>
+    </dl>
+  </article>
+
+  <p class="print:hidden mt-6 text-muted text-sm">Print this page to keep a copy. Its address is the proof: anyone who opens it sees this check.</p>
+@else
+  <h1 class="font-semibold text-3xl text-ink tracking-tight">No certificate has this serial</h1>
+  <p class="mt-3 max-w-[60ch] text-muted">Check it against the certificate you were given. A serial looks like CUR-ABCD-EFGH-2345.</p>
+@endif

@@ -116,7 +116,7 @@ export async function seedStacksAcademy(input: { ownerId: number, slug?: string,
       throw new AcademyError(`The academy "${slug}" belongs to someone else.`)
   }
   else {
-    academy = await createAcademy({ ownerId: input.ownerId, name: 'Learn Stacks', slug })
+    academy = await createAcademy({ ownerId: input.ownerId, name: 'LessonStack', slug })
     academy = await updateAcademy(academy, { vocabulary: 'series', tagline: 'The Stacks framework, one episode at a time.' })
   }
 

@@ -83,3 +83,35 @@ describe('what the app forwards to Cursio', () => {
     expect(forwarded.some(([, , upstream]) => upstream.includes('studio'))).toBe(false)
   })
 })
+
+describe('checking a certificate from another app', () => {
+  const answers: Record<string, { status: number, body: unknown }> = {
+    'https://cursio.test/api/learn/stacks/certificates/CUR-ABCD-EFGH-2345': { status: 200, body: { certificate: { serial: 'CUR-ABCD-EFGH-2345', learnerName: 'Ada Lovelace', courseTitle: 'Bootcamp', academyName: 'LessonStack', issuedAt: '2026-11-12 10:00:00', revoked: false } } },
+  }
+  const calls: string[] = []
+  const fake = (async (url: string) => {
+    calls.push(url)
+    const answer = answers[url] ?? { status: 404, body: {} }
+    return Response.json(answer.body, { status: answer.status })
+  }) as unknown as typeof fetch
+
+  test('a serial is found whatever its case, and an unknown one is null', async () => {
+    const { createCursio, issuedOn } = await import('@cursio/academy')
+    const cursio = createCursio({ url: 'https://cursio.test', academy: 'stacks', fetch: fake })
+    const found = await cursio.certificate(' cur-abcd-efgh-2345 ')
+    expect(found?.learnerName).toBe('Ada Lovelace')
+    expect(issuedOn(found!.issuedAt)).toBe('November 12, 2026')
+    expect(await cursio.certificate('CUR-ZZZZ-ZZZZ-ZZZZ')).toBeNull()
+  })
+
+  test('something that is not a serial is never sent anywhere', async () => {
+    const { cleanSerial, createCursio, issuedOn } = await import('@cursio/academy')
+    const cursio = createCursio({ url: 'https://cursio.test', academy: 'stacks', fetch: fake })
+    const before = calls.length
+    for (const bad of ['../../studio', 'CUR-ABCD', '', 'CUR-ABC0-EFGH-2345', 'CUR-ABCD-EFGH-2345/../x'])
+      expect(await cursio.certificate(bad)).toBeNull()
+    expect(calls.length).toBe(before)
+    expect(cleanSerial('cur-abcd-efgh-2345')).toBe('CUR-ABCD-EFGH-2345')
+    expect(issuedOn('not a date')).toBe('')
+  })
+})

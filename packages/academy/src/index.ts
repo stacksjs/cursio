@@ -56,6 +56,28 @@ export interface Outline {
   lessonIds: number[]
 }
 
+/** A Certificate as anyone holding its serial may read it. */
+export interface Certificate {
+  serial: string
+  learnerName: string
+  courseTitle: string
+  academyName: string
+  issuedAt: string
+  revoked: boolean
+}
+
+/** A serial as Cursio writes them (`CUR-ABCD-EFGH-2345`), or empty: it goes into a path. */
+export function cleanSerial(value: unknown): string {
+  const serial = String(value ?? '').trim().toUpperCase()
+  return /^CUR-[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(serial) ? serial : ''
+}
+
+/** The day a Certificate was issued, written out, in UTC so it reads the same everywhere. */
+export function issuedOn(stamp: string): string {
+  const date = new Date(/[zZ]$/.test(stamp) ? stamp : `${stamp.replace(' ', 'T')}Z`)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
+}
+
 export interface Words {
   course: string
   courses: string
@@ -110,6 +132,8 @@ export interface CursioClient {
   catalog: () => Promise<{ academy: Academy, courses: CatalogEntry[] }>
   /** One published Course with its outline, or null when there is none by that slug. */
   course: (slug: string) => Promise<{ academy: Academy, course: Course, outline: Outline } | null>
+  /** A Certificate this Academy issued, by its serial, or null when there is none. */
+  certificate: (serial: string) => Promise<Certificate | null>
 }
 
 /** The origin of a Cursio URL, or a refusal: nothing is fetched from a typo. */
@@ -163,6 +187,11 @@ export function createCursio(options: CursioOptions): CursioClient {
     async course(slug) {
       const clean = cleanSlug(slug)
       return clean ? await read<{ academy: Academy, course: Course, outline: Outline }>(`/courses/${clean}`) : null
+    },
+    async certificate(serial) {
+      const clean = cleanSerial(serial)
+      const data = clean ? await read<{ certificate: Certificate }>(`/certificates/${clean}`) : null
+      return data?.certificate ?? null
     },
   }
 }

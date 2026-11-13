@@ -1,7 +1,8 @@
 @extends('layouts/marketing')
 @section('content')
 <script server>
-import { academyForSite } from '~/app/Support/academies'
+import sites from '~/config/sites'
+import { academyForSite, isAcademyHost } from '~/app/Support/academies'
 import { catalogOf } from '~/app/Support/courses'
 import { site } from '~/resources/data/site'
 
@@ -10,6 +11,10 @@ import { site } from '~/resources/data/site'
 // `school` too and swaps its chrome, because a view has one layout and cannot
 // choose between two.
 const school = await academyForSite(requestContext.site())
+// An Academy's address with no Academy behind it is not Cursio's home page.
+if (!school && isAcademyHost(requestContext.host(), sites.baseDomain, sites.platformHosts))
+  notFound()
+
 const entries = school ? await catalogOf(school.id) : []
 const academyHome = '/'
 

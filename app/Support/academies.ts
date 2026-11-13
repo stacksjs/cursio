@@ -99,6 +99,19 @@ export async function academyForSite(site: { subdomain?: string } | null | undef
   return site?.subdomain ? await academyBySlug(site.subdomain) : null
 }
 
+/**
+ * True when a host is spelled like an Academy's own (`harbor.cursio.org`) and
+ * is not one of Cursio's. With no Academy behind it, such a host is a 404 and
+ * never Cursio's home page under somebody else's name.
+ */
+export function isAcademyHost(host: string, baseDomain: string, platformHosts: string[]): boolean {
+  const name = host.trim().toLowerCase().replace(/:\d+$/, '')
+  const base = baseDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[:/].*$/, '')
+  if (!name || !base || platformHosts.map(h => h.toLowerCase()).includes(name))
+    return false
+  return name.endsWith(`.${base}`)
+}
+
 // The words an Academy's Learners read live with the components that print
 // them, in the package other apps install too.
 export { type Words, wordsOf } from '@cursio/academy'

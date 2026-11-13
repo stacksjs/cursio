@@ -4,24 +4,29 @@ import { env } from '@stacksjs/env'
 export default {
   from: {
     name: env.MAIL_FROM_NAME || 'Cursio',
-    address: env.MAIL_FROM_ADDRESS || 'hello@example.com',
+    address: env.MAIL_FROM_ADDRESS || `noreply@${env.MAIL_DOMAIN || 'cursio.org'}`,
   },
 
-  domain: env.MAIL_DOMAIN || env.APP_DOMAIN || 'example.com',
-  mailboxes: [],
+  domain: env.MAIL_DOMAIN || 'cursio.org',
+  /*
+   * The mailbox Cursio sends from. `buddy mail:provision` creates it on the
+   * shared mail server, with its password taken from MAIL_PASSWORD_NOREPLY,
+   * and publishes the domain's MX, SPF, DKIM and DMARC records.
+   */
+  mailboxes: ['noreply'],
   forwards: {},
   url: env.APP_URL || 'cursio.localhost',
   charset: 'UTF-8',
 
   server: {
-    // Explicit opt-in: a generated application must never reconcile the
-    // framework repository's shared mail server or mailboxes.
-    enabled: false,
+    enabled: true,
+    /*
+     * The mail server belongs to the `stacks` app on the shared box. Without
+     * this line a deploy takes this app's own address for the mail host and
+     * rewrites the mail DNS records to point at it.
+     */
+    attachTo: 'stacks',
     scan: true,
     subdomain: 'mail',
-    // Gmail Postmaster Tools shows how Gmail receives your mail. Add your
-    // domain at https://postmaster.google.com, paste the TXT value it shows,
-    // and every deploy keeps it published.
-    // postmaster: { google: 'google-site-verification=...' },
   },
 } satisfies EmailConfig

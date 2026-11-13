@@ -1,0 +1,118 @@
+@extends('layouts/app')
+@section('content')
+<script server>
+const pageTitle = 'Report - Cursio Studio'
+const courseId = typeof id !== 'undefined' ? Number(id) : 0
+</script>
+<script client>
+import { dashboardApi } from '~/storage/framework/defaults/functions/dashboard-api'
+
+const courseHome = `/studio/courses/{{ courseId }}`
+const source = `/api/studio/courses/{{ courseId }}/report`
+
+const loading = state(true)
+const problem = state('')
+const title = state('')
+const report = state(null)
+
+// The tallest week sets the scale of the enrollment bars.
+const peak = derived(() => Math.max(1, ...(report()?.enrollments || []).map(entry => entry.count)))
+
+function weekLabel(week) {
+  const date = new Date(`${week}T00:00:00Z`)
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
+function barHeight(count) {
+  return `${Math.round((count / peak()) * 100)}%`
+}
+
+onMount(async () => {
+  try {
+    const data = await dashboardApi(source)
+    title.set(data.course.title)
+    report.set(data.report)
+  }
+  catch (error) {
+    problem.set(error?.status === 401 ? 'Sign in to see this report.' : (error?.message || 'The report could not be loaded.'))
+  }
+  loading.set(false)
+})
+</script>
+<template>
+<div data-stx-content>
+  <a :href="courseHome" class="text-muted text-sm hover:text-ink">Back to the course</a>
+
+  <p class="mt-6 text-muted" :hidden="!loading()">Counting.</p>
+  <p class="mt-6 font-medium text-ink" :hidden="!problem()" hidden role="alert" x-text="problem()"></p>
+
+  <div :hidden="report() === null" hidden>
+    <h1 class="mt-4 font-semibold text-3xl text-ink tracking-tight">Report</h1>
+    <p class="mt-1 text-muted text-sm">{{ title() }}</p>
+
+    <dl class="grid gap-x-10 gap-y-6 grid-cols-2 md:grid-cols-4 mt-8">
+      <div>
+        <dt class="text-muted text-sm">Enrolled</dt>
+        <dd class="mt-1 font-semibold tabular-nums text-3xl text-ink tracking-tight">{{ report()?.enrolled }}</dd>
+      </div>
+      <div>
+        <dt class="text-muted text-sm">Started</dt>
+        <dd class="mt-1 font-semibold tabular-nums text-3xl text-ink tracking-tight">{{ report()?.started }}</dd>
+      </div>
+      <div>
+        <dt class="text-muted text-sm">Completed</dt>
+        <dd class="mt-1 font-semibold tabular-nums text-3xl text-ink tracking-tight">{{ report()?.completed }} <span class="font-normal text-base text-muted">{{ report()?.completionRate }}%</span></dd>
+      </div>
+      <div>
+        <dt class="text-muted text-sm">Rating</dt>
+        <dd class="mt-1 font-semibold tabular-nums text-3xl text-ink tracking-tight">{{ report()?.rating.average ?? 'None' }} <span class="font-normal text-base text-muted" :hidden="!report()?.rating.count">({{ report()?.rating.count }})</span></dd>
+      </div>
+    </dl>
+
+    <p class="mt-10 p-6 text-muted bg-tint rounded-2xl" :hidden="(report()?.enrolled || 0) > 0">Nobody has enrolled yet. The numbers appear as soon as someone does.</p>
+
+    <section class="mt-12" :hidden="(report()?.enrolled || 0) === 0" aria-labelledby="weeks-heading">
+      <h2 id="weeks-heading" class="font-semibold text-ink text-xl tracking-tight">New enrollments, last eight weeks</h2>
+      <ol class="flex gap-2 items-end mt-5 h-40">
+        <li :for="entry in report()?.enrollments || []" class="flex flex-1 flex-col gap-2 items-center justify-end h-full">
+          <span class="tabular-nums text-ink text-xs">{{ entry.count }}</span>
+          <span class="w-full min-h-1 bg-accent rounded-t-md" :style="'height: ' + barHeight(entry.count)" aria-hidden="true"></span>
+          <span class="text-muted text-xs whitespace-nowrap">{{ weekLabel(entry.week) }}</span>
+        </li>
+      </ol>
+    </section>
+
+    <section class="mt-12" :hidden="(report()?.enrolled || 0) === 0" aria-labelledby="funnel-heading">
+      <h2 id="funnel-heading" class="font-semibold text-ink text-xl tracking-tight">Where learners stop</h2>
+      <p class="mt-1 max-w-[65ch] text-muted text-sm">Each lesson with the share of enrolled learners who completed it, and how many fewer than the lesson before.</p>
+      <ol class="flex flex-col gap-3 mt-5">
+        <li :for="step in report()?.funnel || []" class="grid gap-x-4 gap-y-1 grid-cols-1 md:grid-cols-12 md:items-center">
+          <p class="md:col-span-5 min-w-0 text-ink text-sm truncate"><span class="tabular-nums text-muted">{{ step.number }}.</span> {{ step.title }}</p>
+          <div class="md:col-span-5 overflow-hidden h-2 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="step.percent" :aria-label="'Completed ' + step.title">
+            <div class="h-full bg-accent rounded-full" :style="'width: ' + step.percent + '%'"></div>
+          </div>
+          <p class="md:col-span-2 tabular-nums text-muted text-sm md:text-right">{{ step.completed }} ({{ step.percent }}%)<span :hidden="step.dropped === 0">, {{ step.dropped }} fewer</span></p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="mt-12" :hidden="(report()?.quizzes || []).length === 0" aria-labelledby="quizzes-heading">
+      <h2 id="quizzes-heading" class="font-semibold text-ink text-xl tracking-tight">Quizzes</h2>
+      <p class="mt-1 max-w-[65ch] text-muted text-sm">Questions are listed hardest first: the ones fewest answers got right.</p>
+      <ul class="flex flex-col gap-4 mt-5">
+        <li :for="quiz in report()?.quizzes || []" class="p-5 bg-surface border border-line rounded-2xl">
+          <p class="font-medium text-ink">{{ quiz.title }}</p>
+          <p class="mt-1 tabular-nums text-muted text-sm">{{ quiz.sat }} sat it, {{ quiz.passed }} passed ({{ quiz.passRate }}%), average {{ quiz.averagePercent }}%</p>
+          <ol class="flex flex-col gap-2 mt-4 pt-4 border-line border-t">
+            <li :for="item in quiz.items" class="grid gap-x-4 gap-y-1 grid-cols-1 md:grid-cols-12 md:items-center">
+              <p class="md:col-span-8 min-w-0 text-ink text-sm">{{ item.prompt }}</p>
+              <p class="md:col-span-4 tabular-nums text-muted text-sm md:text-right">{{ item.percentCorrect }}% right, {{ item.correct }} of {{ item.answered }}</p>
+            </li>
+          </ol>
+        </li>
+      </ul>
+    </section>
+  </div>
+</div>
+</template>
+@endsection

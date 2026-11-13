@@ -182,6 +182,7 @@ onMount(load)
       </div>
       <div class="flex flex-wrap gap-2 items-center">
         <a :href="'/studio/courses/' + editingId + '/learners'" class="inline-flex items-center px-5 h-11 font-medium text-ink whitespace-nowrap hover:bg-tint border border-line rounded-full transition-colors">Learners</a>
+        <a :href="'/studio/courses/' + editingId + '/report'" class="inline-flex items-center px-5 h-11 font-medium text-ink whitespace-nowrap hover:bg-tint border border-line rounded-full transition-colors">Report</a>
         <a :href="'/studio/courses/' + editingId + '/marking'" class="inline-flex items-center px-5 h-11 font-medium text-ink whitespace-nowrap hover:bg-tint border border-line rounded-full transition-colors">Marking</a>
         <button type="button" class="inline-flex items-center px-5 h-11 font-medium text-accent-ink whitespace-nowrap bg-accent rounded-full disabled:opacity-60" :disabled="busy()" @click="togglePublish()">{{ published() ? 'Return to draft' : 'Publish course' }}</button>
       </div>

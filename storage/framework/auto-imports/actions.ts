@@ -38,6 +38,7 @@ export const actions = {
   'Actions/Studio/BankListAction': '../../../app/Actions/Studio/BankListAction.ts',
   'Actions/Studio/BankShowAction': '../../../app/Actions/Studio/BankShowAction.ts',
   'Actions/Studio/CourseOutlineAction': '../../../app/Actions/Studio/CourseOutlineAction.ts',
+  'Actions/Studio/CourseReportAction': '../../../app/Actions/Studio/CourseReportAction.ts',
   'Actions/Studio/CreateAcademyAction': '../../../app/Actions/Studio/CreateAcademyAction.ts',
   'Actions/Studio/CreateBankAction': '../../../app/Actions/Studio/CreateBankAction.ts',
   'Actions/Studio/CreateCourseAction': '../../../app/Actions/Studio/CreateCourseAction.ts',

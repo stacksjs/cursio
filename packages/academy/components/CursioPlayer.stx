@@ -682,10 +682,10 @@ onMount(async () => {
 
   <div class="mt-6" :hidden="!enrolled()" hidden>
     <p class="text-ink"><span class="font-semibold tabular-nums" x-text="percent()">0</span>% complete</p>
-    <div class="overflow-hidden mt-2 h-1.5 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="percent()" aria-label="Course progress">
+    <div class="overflow-hidden mt-2 h-1.5 bg-tint rounded-full" role="progressbar" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="percent()" aria-label="Your progress">
       <div class="h-full bg-accent rounded-full duration-300 transition-all" :style="`width: ${percent()}%`"></div>
     </div>
-    <p class="mt-3 font-medium text-ink" :hidden="!finished()" hidden role="status">You have completed this course.</p>
+    <p class="mt-3 font-medium text-ink" :hidden="!finished()" hidden role="status">You have completed this {{ words.course }}.</p>
     <a :href="'/certificates/' + certificate()" class="inline-flex gap-2 items-center mt-3 px-5 h-11 font-medium text-ink hover:bg-tint border border-line rounded-full transition-colors" :hidden="!certificate()" hidden><span class="size-5 i-hugeicons-certificate-01" aria-hidden="true"></span>View your certificate</a>
   </div>
 
@@ -717,7 +717,7 @@ onMount(async () => {
     </div>
 
     <div class="lg:col-span-7">
-      <p class="p-6 text-muted bg-tint rounded-2xl" :hidden="openLesson() !== null">{{ enrolled() ? 'Pick one to begin.' : (previews.length > 0 ? 'Watch a free one, or enroll to open them all.' : 'Enroll to open them.') }}</p>
+      <p class="p-6 text-muted bg-tint rounded-2xl" :hidden="openLesson() !== null">{{ enrolled() ? 'Pick one to begin.' : (previews.length > 0 ? 'Open a free one, or enroll to open them all.' : 'Enroll to open them.') }}</p>
       <article class="p-6 bg-surface border border-line rounded-2xl" :hidden="openLesson() === null" hidden>
         <h2 class="font-semibold text-2xl text-ink tracking-tight">{{ openLesson()?.title }}</h2>
         <video class="aspect-video mt-4 w-full bg-black rounded-xl" controls playsinline preload="metadata" :hidden="!openLesson()?.video_url" hidden :src="openLesson()?.video_url || ''" @loadedmetadata="ready($event.target)" @timeupdate="watched($event.target)" @ended="ended()"></video>
@@ -726,7 +726,7 @@ onMount(async () => {
           <button :for="value in speeds" type="button" class="inline-flex items-center px-3 h-9 tabular-nums text-xs border rounded-full" :class="speed() === value ? 'border-accent bg-accent-soft text-ink' : 'border-line text-muted'" :aria-pressed="speed() === value" @click="setSpeed(value)">{{ value }}x</button>
         </div>
         <div class="mt-4 notes" x-html="openLesson()?.body_html || ''"></div>
-        <p class="mt-6 p-4 text-ink text-sm bg-accent-soft rounded-xl" :hidden="enrolled() || openLesson() === null">This one is free. Enroll to watch the rest and keep your place.</p>
+        <p class="mt-6 p-4 text-ink text-sm bg-accent-soft rounded-xl" :hidden="enrolled() || openLesson() === null">This one is free. Enroll to open the rest and keep your place.</p>
         <button type="button" class="inline-flex items-center mt-6 px-5 h-11 font-medium text-accent-ink bg-accent rounded-full disabled:opacity-60" :hidden="openLesson()?.kind === 'quiz' || openLesson()?.kind === 'assignment' || !enrolled()" :disabled="busy() || openLesson()?.completed" @click="complete()">{{ openLesson()?.completed ? 'Completed' : 'Mark complete' }}</button>
 
         <div class="mt-6 pt-6 border-line border-t" :hidden="task() === null" hidden>
@@ -921,7 +921,7 @@ onMount(async () => {
     </ul>
   </section>
 @else
-  <h1 class="font-semibold text-3xl text-ink tracking-tight">Course not found</h1>
+  <h1 class="font-semibold text-3xl text-ink tracking-tight">Nothing is published at this address</h1>
 @endif
 </div>
 </template>

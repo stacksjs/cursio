@@ -19,9 +19,10 @@ CURSIO_ACADEMY=your-academy-slug
 ## What you get
 
 - **Components**, usable by tag name in any stx view:
-  - `<CursioCatalog :school :entries home api />` lists the published courses, with topic filters and a "Continue watching" row for signed-in learners.
+  - `<CursioCatalog :school :entries home api />` lists the published courses, with topic filters and a row for signed-in learners to pick up where they left off, plus their points and badges.
   - `<CursioPlayer :school :course :outline home path api />` is the course page: outline, lessons, video, notes, quizzes, assignments, progress and the certificate link.
   - `<CursioSignIn mode="login|register" auth home />` signs a learner in to the academy from your page.
+  - `<CursioCertificate :certificate />` shows a certificate and whether it is genuine, for a page such as `/certificates/[serial]`.
 - **A client** for your server scripts:
 
   ```ts
@@ -30,6 +31,7 @@ CURSIO_ACADEMY=your-academy-slug
   const cursio = createCursio({ url: env.CURSIO_URL, academy: env.CURSIO_ACADEMY })
   const { academy, courses } = await cursio.catalog()
   const found = await cursio.course('stacks-bootcamp')
+  const certificate = await cursio.certificate('CUR-ABCD-EFGH-2345')
   ```
 
 - **Forwarding routes** under `/api/cursio`. A learner's browser only talks to your app, and your app passes the call on to Cursio. Only sign-in and the learner API are forwarded, and only for the academy you configured.

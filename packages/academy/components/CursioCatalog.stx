@@ -117,7 +117,7 @@ onMount(async () => {
   </section>
 
   <section class="mt-10" :hidden="watching().length === 0" hidden aria-labelledby="continue-heading">
-    <h2 id="continue-heading" class="font-medium text-muted text-sm">Continue watching</h2>
+    <h2 id="continue-heading" class="font-medium text-muted text-sm">Pick up where you left off</h2>
     <ul class="grid gap-3 grid-cols-1 md:grid-cols-2 mt-3">
       <li :for="entry in watching()">
         <a :href="entry.href" class="block p-5 h-full bg-surface hover:bg-tint border border-line rounded-2xl transition-colors">

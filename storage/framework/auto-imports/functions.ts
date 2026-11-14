@@ -74,6 +74,8 @@ export { fetchDashboardData, fetchDashboardStats } from '@stacksjs/defaults/func
 export type { DataStats, DashboardActivity, DashboardUser, DashboardTeam, DashboardSubscriber, DashboardDataResponse, DataMode } from '@stacksjs/defaults/functions/data.ts'
 export { fetchDeployments, fetchDeployment, fetchDeployScript, updateDeployScript, fetchDeploymentTerminal, normalizeDeployment, normalizeDeploymentList, normalizeDeploymentDetail, summarizeDeployments, previewDeploymentRollback, runDeploymentRollback } from '@stacksjs/defaults/functions/deployments.ts'
 export type { DeploymentRecord, DeploymentSummary, DeployScript, DeploymentTerminal, DeploymentRollbackPlan, DeployScriptUpdate } from '@stacksjs/defaults/functions/deployments.ts'
+export { createHoneypot } from '@stacksjs/defaults/functions/honeypot.ts'
+export type { HoneypotFields, HoneypotTrap } from '@stacksjs/defaults/functions/honeypot.ts'
 export { fetchDashboardInbox, fetchDashboardInboxBody, downloadDashboardInboxAttachment, fetchInboxActivity, sendInboxEmail, setInboxEmailReadState, deleteInboxEmail, parseInboxSender, normalizeInboxPreview, mapDashboardInboxEntry, useInbox } from '@stacksjs/defaults/functions/inbox.ts'
 export type { InboxActivityRange, InboxActivity, InboxSendInput, DashboardInboxEmail, DashboardInboxAttachment, LoadedDashboardInbox, InboxEntry, InboxBody } from '@stacksjs/defaults/functions/inbox.ts'
 export { fetchJobs, fetchJobStats, fetchJob, retryJob, retryFailedJobs, fetchJobDefinitions, useJobs } from '@stacksjs/defaults/functions/jobs.ts'

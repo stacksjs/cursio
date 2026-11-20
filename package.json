@@ -57,8 +57,8 @@
     "probe:integrations": "./buddy integrations:probe"
   },
   "dependencies": {
-    "@cursio/academy": "workspace:*",
-    "@stacksjs/actions": "^0.75.628",
+    "@cursio/academy": "workspace:*0.1.7",
+    "@stacksjs/actions": "^0.75.639",
     "@stacksjs/env": "^0.75.628",
     "@stacksjs/path": "^0.75.628",
     "@stacksjs/stx": "0.2.913",
